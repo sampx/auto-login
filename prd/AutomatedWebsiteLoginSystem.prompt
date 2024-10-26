@@ -1,0 +1,120 @@
+You are tasked with designing and developing a program that automatically logs into a specific website. The program should meet the following requirements:
+
+1. Ability to set a schedule for automatic login attempts
+2. Store username and password in a .env file
+3. Send an email notification to a specified address upon success or failure
+4. Deployed using Docker
+
+---
+
+To accomplish this task, follow these instructions:
+
+1. Program Structure:
+
+Develop the program using the following structure:
+
+   a. Create a main script (e.g., `auto_login.py`) that will:
+      - Load environment variables
+      - Implement the login logic
+      - Handle success/failure scenarios
+      - Trigger email notifications
+   b. Create a separate module for email functionality (e.g., `email_notifier.py`)
+   c. Use a web automation library like Selenium or Playwright for the login process
+   d. Implement proper error handling and logging throughout the program
+
+2. Scheduling:
+
+To implement scheduling functionality for automatic login attempts, follow these steps:
+
+   1. Install the 'schedule' library by adding it to your requirements.txt file.
+   2. In your main script (auto_login.py), import the schedule library:
+
+      ```python
+      import schedule
+      import time
+      ```
+   3. Create a function that performs the login attempt:
+      ```python
+      def attempt_login():
+         # Your login logic here
+         pass
+      ```
+   4. Set up the schedule for login attempts. For example, to run every day at 9:00 AM:
+      ```python
+      schedule.every().day.at("09:00").do(attempt_login)
+      ```
+      You can adjust the frequency as needed. Some other examples:
+      - Every hour: `schedule.every().hour.do(attempt_login)`
+      - Every Monday at 7:30 PM: `schedule.every().monday.at("19:30").do(attempt_login)`
+      - Every 5 minutes: `schedule.every(5).minutes.do(attempt_login)`
+   5. Add a loop in your main script to keep the scheduler running:
+      ```python
+      while True:
+         schedule.run_pending()
+         time.sleep(1)
+      ```
+   6. Remember to handle exceptions within the `attempt_login` function to ensure the scheduler continues running even if an individual login attempt fails.
+
+3. Environment Variables:
+
+Create a .env file in the project root directory with the following structure:
+   ```
+   WEBSITE_URL=https://example.com
+   USERNAME=your_username
+   PASSWORD=your_password
+   ```
+Ensure that the .env file is added to .gitignore to prevent accidental commits of sensitive information.
+
+4. Email Notifications:
+
+To implement email notifications for login success or failure, follow these steps:
+
+   1. Add the following environment variables to your .env file:
+      ```
+      EMAIL_SENDER=your_email@example.com
+      EMAIL_PASSWORD=your_email_password
+      EMAIL_RECIPIENT=recipient@example.com
+      SMTP_SERVER=smtp.example.com
+      SMTP_PORT=587
+      ```
+   2. In your main script (auto_login.py), import and use the notification functions from the email_notifier module.
+
+   3. Test the email functionality thoroughly to ensure notifications are sent correctly for both success and failure scenarios.
+
+   4. Remember to handle any exceptions that may occur during the email sending process to prevent your main program from crashing due to email-related issues.
+
+5. Docker Deployment:
+
+Use this instructions to set up a Docker environment for the program:
+
+   1. Create a Dockerfile in your project root directory with the following content:
+      ```dockerfile
+      FROM python:3.9-slim      
+      WORKDIR /app
+      COPY requirements.txt .
+      RUN pip install --no-cache-dir -r requirements.txt      
+      COPY . .      
+      CMD ["python", "auto_login.py"]
+      ```
+   2. Create a requirements.txt file with necessary Python packages:
+      ```
+      selenium
+      python-dotenv
+      schedule
+      ```
+
+6. Implementation Guidelines:
+
+   - Use a headless browser in the Docker container for web automation
+   - Implement retry logic in case of temporary network issues or website unavailability
+   - Use secure coding practices, especially when handling credentials
+   - Implement proper logging to aid in troubleshooting
+   - Comments explaining key parts of the code in Chinese
+   - Remember to adhere to best practices for security, error handling, and code organization throughout the implementation.
+
+7. Testing and Troubleshooting:
+
+   - Test the program thoroughly in a local Docker environment before deployment
+   - Implement unit tests for critical components
+   - Use Docker logs for debugging and monitoring the application
+
