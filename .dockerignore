@@ -2,8 +2,13 @@ __pycache__
 *.pyc
 .git
 .gitignore
-.env
+.env*
 *.log
-test_*
 prd/
-README.md
+Dockerfile
+scripts/
+.venv/
+.prompts
+.aider*
+.dockerignore
+docker*

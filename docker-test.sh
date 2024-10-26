@@ -20,7 +20,7 @@ fi
 echo "启动测试容器..."
 docker run --name ${CONTAINER_NAME} \
     --env-file .env \
-    -v $(pwd):/app \
+    -v $(pwd)/.env.test:/app/.env \
     ${IMAGE_NAME}:${TAG} \
     python test_login.py
 

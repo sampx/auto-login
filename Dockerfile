@@ -14,8 +14,9 @@ RUN apt-get update && apt-get install -y \
     gnupg \
     && rm -rf /var/lib/apt/lists/*
 
-# 复制项目文件
-COPY . .
+# 复制 requirements.txt 文件并安装 Python 依赖
+# 由于 requirements.txt 通常不会每次都改变，所以把它放在靠前的位置，以便利用缓存
+COPY requirements.txt ./
 
 # 安装Python依赖
 RUN pip install --no-cache-dir -r requirements.txt
@@ -24,8 +25,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN playwright install chromium
 RUN playwright install-deps
 
-# 设置环境变量文件
-ENV $(cat .env | xargs)
+# 复制项目文件
+# 由于项目文件可能频繁改变，因此放在 Dockerfile 的最后部分
+COPY . .
 
 # 运行应用
 CMD ["python", "auto_login.py"]

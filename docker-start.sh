@@ -16,11 +16,11 @@ if [ "$(docker ps -aq -f name=${CONTAINER_NAME})" ]; then
     docker rm -f ${CONTAINER_NAME}
 fi
 
-# 运行测试容器
+# 运行容器
 echo "启动容器..."
 docker run -d --name ${CONTAINER_NAME} \
     --env-file .env \
-    -v $(pwd):/app \
-    ${IMAGE_NAME}:${TAG} \
-    python auto_login.py
+    -v $(pwd)/.env:/app/.env \
+    ${IMAGE_NAME}:${TAG} 
 
+echo "容器启动完成！"
