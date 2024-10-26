@@ -70,22 +70,46 @@ class AutoLogin:
             if self.browser_handler:
                 self.browser_handler.cleanup()
 
-def main():
-    auto_login = AutoLogin()
-    
-    # 安排登录尝试
-    # 每个月5日上午10:32分进行自动登录
-    # schedule.every().month.on(5).at("10:32").do(auto_login.attempt_login)
+def validate_env_vars():
+    required_vars = ['WEBSITE_URL', 'USERNAME', 'PASSWORD', 'MAX_RETRIES', 
+                     'LOGIN_SCHEDULE_TYPE', 'LOGIN_SCHEDULE_DATE', 'LOGIN_SCHEDULE_TIME']
+    missing_vars = [var for var in required_vars if not os.getenv(var)]
+    if missing_vars:
+        raise ValueError(f"缺少必要的环境变量: {', '.join(missing_vars)}")
+    # TODO 检查配置项的值合法性
 
-    schedule.every(2).minutes.do(auto_login.attempt_login)
-    
-    # 启动时立即运行一次
-    auto_login.attempt_login()
-    
-    # 保持调度器运行
-    while True:
-        schedule.run_pending()
-        time.sleep(60)
+def main():
+    try:
+        validate_env_vars()
+
+        auto_login = AutoLogin()
+        login_schedule_type = os.getenv('LOGIN_SCHEDULE_TYPE')
+        login_schedule_date = os.getenv('LOGIN_SCHEDULE_DATE')
+        login_schedule_time = os.getenv('LOGIN_SCHEDULE_TIME')
+        retry_interval = 1
+
+        if login_schedule_type == 'monthly':
+            if not login_schedule_date.isdigit() or not (1 <= int(login_schedule_date) <= 31):
+                raise ValueError("LOGIN_SCHEDULE_DATE 必须是1到31之间的数字")
+            logger.info(f"每月 {login_schedule_date} 号 {login_schedule_time} 时自动进行登录...")
+            schedule.every().month.on(int(login_schedule_date)).at(login_schedule_time).do(auto_login.attempt_login)
+            retry_interval = 60 * 24
+        elif login_schedule_type == 'minutes':
+            logger.info("测试 - 使用分钟级调度, 每分钟登录一次...")
+            schedule.every(retry_interval).minutes.do(auto_login.attempt_login)
+            # 启动时运行一次
+            auto_login.attempt_login()
+        else:
+            raise ValueError(f"无效的LOGIN_SCHEDULE_TYPE: {login_schedule_type}")
+
+        # 保持调度器运行
+        while True:
+            schedule.run_pending()
+            time.sleep(retry_interval * 60)
+
+    except Exception as e:
+        logger.error(f"程序运行失败: {e}")
+        notify_failure(f"自动登录调度任务异常: {e}")
 
 if __name__ == "__main__":
     main()
