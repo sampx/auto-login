@@ -18,7 +18,7 @@ fi
 
 # 运行测试容器
 echo "启动测试容器..."
-docker run --name ${CONTAINER_NAME} \
+docker run --rm --name ${CONTAINER_NAME} \
     --env-file .env \
     -v $(pwd)/.env.test:/app/.env \
     ${IMAGE_NAME}:${TAG} \
