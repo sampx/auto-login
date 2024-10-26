@@ -3,6 +3,7 @@ __pycache__
 .git
 .gitignore
 .env*
+logs/
 *.log
 prd/
 Dockerfile

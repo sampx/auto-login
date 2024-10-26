@@ -4,11 +4,12 @@ This system automatically logs into a specified website on a schedule and sends 
 
 ## Setup Instructions
 
-1. Clone the repository
+1. Clone the repository and cd into it
 2. Copy `.env.example` to `.env` and fill in your credentials
-3. Install Docker and Docker Compose
-4. Run `chmod +x start.sh`
-5. Execute `./start.sh`
+3. Install Docker
+4. Build docker image: `./build.sh`
+5. Test the system: `./test.sh`
+6. Run schedule: `./start.sh`
 
 ## Configuration
 
@@ -18,19 +19,10 @@ This system automatically logs into a specified website on a schedule and sends 
   - Schedule timing
   - Retry parameters
 
-## Monitoring
+## Build and Run
 
 - Logs are stored in the `logs` directory
-- View live logs: `docker-compose logs -f`
 - Check container status: `docker ps`
-
-## Troubleshooting
-
-If you encounter issues:
-1. Check the logs in the `logs` directory
-2. Verify your credentials in `.env`
-3. Ensure the website is accessible
-4. Check your email settings
 
 ## Security Notes
 

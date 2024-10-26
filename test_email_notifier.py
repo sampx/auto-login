@@ -1,5 +1,9 @@
+import os
+from dotenv import load_dotenv
 from email_notifier import EmailNotifier
 
+# 从.env.test文件载环境变量
+load_dotenv('.env.test',override=True)
 def main():
     # 创建EmailNotifier实例
     notifier = EmailNotifier()

@@ -3,19 +3,12 @@ import signal
 import threading
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 import time
-import logging
-
-# 设置日志记录器
-logger = logging.getLogger(__name__)
-# 配置日志输出
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
-)
 
 class BrowserHandler:
     def __init__(self):
         """初始化浏览器处理类"""
+        from logger_helper import LoggerHelper
+        self.logger = LoggerHelper.get_logger(__name__)  
         self.browser = None  # 浏览器实例
         self.context = None  # 浏览器上下文
         self.page = None  # 页面实例
@@ -24,14 +17,14 @@ class BrowserHandler:
     def setup_browser(self):
         """设置浏览器"""
         try:
-            logger.info("正在设置浏览器...")
+            self.logger.info("正在设置浏览器...")
             self.playwright = sync_playwright().start()  # 启动Playwright
             self.browser = self.playwright.chromium.launch(
                 headless=True,  # 无头模式
                 args=['--no-sandbox', '--disable-setuid-sandbox']  # 启动参数
             )
             # 设置浏览器上下文，包括语言设置
-            logger.debug("设置浏览器语言环境为英语")
+            self.logger.debug("设置浏览器语言环境为英语")
             self.context = self.browser.new_context(
                 locale='en-US',  # 设置为英语
                 extra_http_headers={
@@ -40,27 +33,27 @@ class BrowserHandler:
                 }
             )
             self.page = self.context.new_page()  # 创建新页面
-            logger.info("浏览器设置完成")
+            self.logger.info("浏览器设置完成")
         except Exception as e:
-            logger.error(f"设置浏览器失败: {str(e)}")
+            self.logger.error(f"设置浏览器失败: {str(e)}")
             self.cleanup()  # 清理资源
             raise
 
     def open_login_page(self, login_url):
         """进行登录"""
-        logger.debug(f"导航到登录页:{login_url}...")
+        self.logger.debug(f"导航到登录页:{login_url}...")
         try:
             response = self.page.goto(login_url, timeout=60000, wait_until='networkidle')
             if not response:
                 raise Exception("页面加载失败: 无响应")
             if response.status >= 400:
                 raise Exception(f"页面加载失败, 错误响应码: {response.status}")
-            logger.debug(f"成功加载登录页面, 状态码: {response.status}")
+            self.logger.debug(f"成功加载登录页面, 状态码: {response.status}")
         except PlaywrightTimeoutError as e:
-            logger.error(f"页面加载超时: {str(e)}")
+            self.logger.error(f"页面加载超时: {str(e)}")
             raise
         except Exception as e:
-            logger.error(f"登录页面加载过程中出现错误: {str(e)}")
+            self.logger.error(f"登录页面加载过程中出现错误: {str(e)}")
             raise
 
     def get_page_info(self):
@@ -74,16 +67,16 @@ class BrowserHandler:
                 };
             }''')
             
-            logger.debug(f"页面标题: {info['title']}, 页面URL: {info['url']}")            
+            self.logger.debug(f"页面标题: {info['title']}, 页面URL: {info['url']}")            
             return info['title']
         except Exception as e:
-            logger.error(f"获取页面信息失败: {str(e)}")
+            self.logger.error(f"获取页面信息失败: {str(e)}")
             return None
     def gather_login_elements(self):
         """获取页面HTML、页面信息, 并查找登录相关的元素"""        
         try:
             html_content = self.page.content()
-            logger.debug(f"页面HTML内容:\n{str(html_content)}")   
+            self.logger.debug(f"页面HTML内容:\n{str(html_content)}")   
             # TODO 优化此处适应大多数网站的登录元素查找逻辑
             # 获取页面信息
             # info = self.page.evaluate('''() => {                
@@ -112,37 +105,37 @@ class BrowserHandler:
             # }''')
             
             # # 打印info调试信息
-            # logger.debug(f"表单数量: {len(info['forms'])}")
+            # self.logger.debug(f"表单数量: {len(info['forms'])}")
             # for form in info['forms']:
-            #     logger.debug(f"表单ID: {form['id']}, 动作: {form['action']}, 方法: {form['method']}")
-            #     logger.debug(f"表单HTML: {form['innerHTML']}")
-            # logger.debug(f"输入字段数量: {len(info['inputs'])}")
+            #     self.logger.debug(f"表单ID: {form['id']}, 动作: {form['action']}, 方法: {form['method']}")
+            #     self.logger.debug(f"表单HTML: {form['innerHTML']}")
+            # self.logger.debug(f"输入字段数量: {len(info['inputs'])}")
             # for input_field in info['inputs']:
-            #     logger.debug(f"字段类型: {input_field['type']}, 名称: {input_field['name']}, 值: {input_field['value']}, id: {input_field['id']}")  
-            # logger.debug(f"按钮数量: {len(info['buttons'])}")
+            #     self.logger.debug(f"字段类型: {input_field['type']}, 名称: {input_field['name']}, 值: {input_field['value']}, id: {input_field['id']}")  
+            # self.logger.debug(f"按钮数量: {len(info['buttons'])}")
             # for button in info['buttons']:
-            #     logger.debug(f"按钮类型: {button['type']}, 名称: {button['name']}, id: {button['id']}")
+            #     self.logger.debug(f"按钮类型: {button['type']}, 名称: {button['name']}, id: {button['id']}")
             
 
             # 获取所有按钮元素
             # buttons = self.page.query_selector_all('button[type="submit"]')
-            # logger.debug(f"页面中找到 {len(buttons)} 个提交按钮")
+            # self.logger.debug(f"页面中找到 {len(buttons)} 个提交按钮")
             # for button in buttons:
             #     text = button.evaluate('node => node.textContent')
-            #     logger.debug(f"按钮文本: {text}, id: {button.get_attribute('id')}, type: {button.get_attribute('type')}")
+            #     self.logger.debug(f"按钮文本: {text}, id: {button.get_attribute('id')}, type: {button.get_attribute('type')}")
 
             # 获取所有表单元素
             # forms = self.page.query_selector_all('form')
-            # logger.debug(f"页面中找到 {len(forms)} 个表单")
+            # self.logger.debug(f"页面中找到 {len(forms)} 个表单")
             # for form in forms:
-            #     logger.debug(f"表单action: {form.get_attribute('action')}, method: {form.get_attribute('method')}")
-            #     logger.debug(f"表单HTML: {form.inner_html()}")
+            #     self.logger.debug(f"表单action: {form.get_attribute('action')}, method: {form.get_attribute('method')}")
+            #     self.logger.debug(f"表单HTML: {form.inner_html()}")
 
             # 检查是否有错误信息显示
             # error_elements = self.page.query_selector_all('.alert-error, .alert-danger, .error-message')
             # for error in error_elements:
             #     text = error.evaluate('node => node.textContent')
-            #     logger.debug(f"发现错误信息: {text}")
+            #     self.logger.debug(f"发现错误信息: {text}")
 
             # 查询用户名和密码输入框，以及提交按钮
             username_field = self.page.query_selector('#id_username')
@@ -150,19 +143,19 @@ class BrowserHandler:
             submit_button = self.page.query_selector('#submit')
 
             # 等待用户名输入框
-            # logger.debug("等待用户名输入框...")
+            # self.logger.debug("等待用户名输入框...")
             # username_field = self.page.wait_for_selector('#id_username', timeout=5000)
             # if not username_field:
             #     raise Exception("未找到用户名输入框")
             
             # 等待密码输入框
-            # logger.debug("等待密码输入框...")
+            # self.logger.debug("等待密码输入框...")
             # password_field = self.page.wait_for_selector('#id_password', timeout=5000)
             # if not password_field:
             #     raise Exception("未找到密码输入框")
             
             # 等待提交按钮
-            # logger.debug("等待提交按钮...")
+            # self.logger.debug("等待提交按钮...")
             # submit_button = self.page.wait_for_selector('#submit', timeout=5000)
             # if not submit_button:
             #     raise Exception("未找到提交按钮")
@@ -173,7 +166,7 @@ class BrowserHandler:
             return username_field, password_field, submit_button
 
         except Exception as e:
-            logger.error(f"获取登录元素失败: {str(e)}")
+            self.logger.error(f"获取登录元素失败: {str(e)}")
             return None, None, None, None
    
     def check_login_status(self):
@@ -182,7 +175,7 @@ class BrowserHandler:
             # 获取当前 URL
             current_url = self.page.url  
 
-            logger.info(f"检查登录状态: 当前页面: {current_url}")
+            self.logger.info(f"检查登录状态: 当前页面: {current_url}")
 
             # 执行 JavaScript 以获取错误信息和登录状态
             error_info = self.page.evaluate('''() => {
@@ -217,9 +210,9 @@ class BrowserHandler:
 
             # 记录错误检查的结果
             if error_info['errors']:
-                logger.error(f"页面错误信息: {error_info['errors']}")
+                self.logger.error(f"页面错误信息: {error_info['errors']}")
             else:
-                logger.debug("页面未发现错误信息")
+                self.logger.debug("页面未发现错误信息")
 
             # 添加 URL 信息到结果中
             error_info['url'] = current_url
@@ -228,7 +221,7 @@ class BrowserHandler:
             return error_info
 
         except Exception as e:
-            logger.error(f"检查登录状态失败: {str(e)}")
+            self.logger.error(f"检查登录状态失败: {str(e)}")
             return {
                 'url': current_url,
                 'errors': [str(e)],
@@ -246,35 +239,35 @@ class BrowserHandler:
         
         while retry_count < max_retries:
             try:
-                logger.info(f"尝试第 {retry_count + 1} 次，共 {max_retries} 次")
+                self.logger.info(f"尝试第 {retry_count + 1} 次，共 {max_retries} 次")
                 
                 # 导航到登录页面，设置较长的超时时间
-                logger.info(f"登录到URL: {url}")
+                self.logger.info(f"登录到URL: {url}")
                 self.page.set_default_timeout(60000)
 
                 # 打开登录页面
-                logger.info("打开登录页面...")
+                self.logger.info("打开登录页面...")
                 self.open_login_page(url)  
 
                 # 获取登录页面标题和信息
                 page_titles['login'] = self.get_page_info()
                 
                 # 获取页面输入元素
-                logger.info("查找登录元素...")
+                self.logger.info("查找登录元素...")
                 username_field, password_field, submit_button = self.gather_login_elements()
                 
                 # 填写用户名和密码
-                logger.info("填写用户名和密码...")
+                self.logger.info("填写用户名和密码...")
                 username_field.fill(username)
                 password_field.fill(password)                
                 
                 # 等待网络请求完成
-                logger.info("点击提交按钮...")
+                self.logger.info("点击提交按钮...")
                 with self.page.expect_navigation(timeout=60000, wait_until='networkidle'):
                     submit_button.click()
                 
                 # 检查登录状态
-                logger.info("检查登录状态...")
+                self.logger.info("检查登录状态...")
                 login_status = self.check_login_status()
 
                 if login_status['errors']:
@@ -283,25 +276,25 @@ class BrowserHandler:
                     # raise Exception(f"登录失败: {error_message}")       
                 
                 # 获取登录后页面标题
-                logger.info("页面加载完成,获取登录后页面标题...")
+                self.logger.info("页面加载完成,获取登录后页面标题...")
                 page_titles['after_login'] = self.get_page_info()
                 page_titles['url'] = login_status['url']
 
                 if not login_status['isLoginPage']:
-                    logger.info("登录成功 - 已离开登录页面")
+                    self.logger.info("登录成功 - 已离开登录页面")
                     return True, page_titles
                                 
             except PlaywrightTimeoutError as e:
-                logger.error(f"登录尝试超时: {str(e)}")
+                self.logger.error(f"登录尝试超时: {str(e)}")
                 retry_count += 1
                 if retry_count < max_retries:
-                    logger.info(f"等待5秒后重试...")
+                    self.logger.info(f"等待5秒后重试...")
                     time.sleep(5)                
             except Exception as e:
-                logger.error(f"登录尝试失败: {str(e)}")
+                self.logger.error(f"登录尝试失败: {str(e)}")
                 retry_count += 1
                 if retry_count < max_retries:
-                    logger.info(f"等待5秒后重试...")
+                    self.logger.info(f"等待5秒后重试...")
                     time.sleep(5)
         
         return False, page_titles
@@ -309,11 +302,11 @@ class BrowserHandler:
     def cleanup(self):
         """清理浏览器资源"""
         try:
-            logger.info("开始清理浏览器资源...")
+            self.logger.info("开始清理浏览器资源...")
             cleanup_timeout = 10  # 设置清理超时时间为10秒
             
             def force_exit():
-                logger.warning("清理超时,强制退出...")
+                self.logger.warning("清理超时,强制退出...")
                 os.kill(os.getpid(), signal.SIGKILL)
             
             # 启动超时计时器
@@ -327,12 +320,12 @@ class BrowserHandler:
                     self.browser.close()
                 if self.playwright:
                     self.playwright.stop()
-                logger.info("浏览器资源清理成功")
+                self.logger.info("浏览器资源清理成功")
             finally:
                 # 取消计时器
                 timer.cancel()
                 
         except Exception as e:
-            logger.error(f"清理资源时出错: {str(e)}")
+            self.logger.error(f"清理资源时出错: {str(e)}")
             # 如果清理过程出错,也强制退出
             os.kill(os.getpid(), signal.SIGKILL)

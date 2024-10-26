@@ -29,5 +29,8 @@ RUN playwright install-deps
 # 由于项目文件可能频繁改变，因此放在 Dockerfile 的最后部分
 COPY . .
 
+# 创建 logs 目录
+RUN mkdir -p /app/logs
+
 # 运行应用
 CMD ["python", "auto_login.py"]
