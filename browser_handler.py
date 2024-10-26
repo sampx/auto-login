@@ -1,3 +1,6 @@
+import os
+import signal
+import threading
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 import time
 import logging
@@ -306,12 +309,30 @@ class BrowserHandler:
     def cleanup(self):
         """清理浏览器资源"""
         try:
-            if self.context:
-                self.context.close()
-            if self.browser:
-                self.browser.close()
-            if self.playwright:
-                self.playwright.stop()
-            logger.info("浏览器资源清理成功")
+            logger.info("开始清理浏览器资源...")
+            cleanup_timeout = 10  # 设置清理超时时间为10秒
+            
+            def force_exit():
+                logger.warning("清理超时,强制退出...")
+                os.kill(os.getpid(), signal.SIGKILL)
+            
+            # 启动超时计时器
+            timer = threading.Timer(cleanup_timeout, force_exit)
+            timer.start()
+            
+            try:
+                if self.context:
+                    self.context.close()
+                if self.browser:
+                    self.browser.close()
+                if self.playwright:
+                    self.playwright.stop()
+                logger.info("浏览器资源清理成功")
+            finally:
+                # 取消计时器
+                timer.cancel()
+                
         except Exception as e:
             logger.error(f"清理资源时出错: {str(e)}")
+            # 如果清理过程出错,也强制退出
+            os.kill(os.getpid(), signal.SIGKILL)
