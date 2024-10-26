@@ -41,15 +41,16 @@ class AutoLogin:
             )
 
             if success:
-                logger.info("登录成功")
+                logger.info("登录成功,发送成功通知邮件...")
                 notify_success(
+                    f"登录成功URL:{page_titles['url']}\n"
                     f"登录页面标题: {page_titles['login']}\n"
                     f"登录后页面标题: {page_titles['after_login']}"
                 )
             else:
                 logger.error("登录失败，已达到最大重试次数")
                 notify_failure(
-                    f"登录失败详情:\n"
+                    f"登录失败, 详情:\n"
                     f"- 尝试次数: {self.max_retries}\n"
                     f"- 目标网站: {self.url}\n"
                     f"- 失败时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
@@ -73,8 +74,10 @@ def main():
     auto_login = AutoLogin()
     
     # 安排登录尝试
-    # schedule.every().day.at("09:00").do(auto_login.attempt_login)
-    schedule.every(1).minutes.do(auto_login.attempt_login)
+    # 每个月5日上午10:32分进行自动登录
+    # schedule.every().month.on(5).at("10:32").do(auto_login.attempt_login)
+
+    schedule.every(2).minutes.do(auto_login.attempt_login)
     
     # 启动时立即运行一次
     auto_login.attempt_login()

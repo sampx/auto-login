@@ -9,7 +9,7 @@ import logging
 logger = logging.getLogger(__name__)
 # 配置日志输出
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
 )
 
@@ -32,7 +32,7 @@ class EmailNotifier:
 
     def send_notification(self, subject, message):
         # 添加调试信息
-        logger.debug(f"发送邮件通知，主题: {subject}, 内容: {message}")
+        logger.info(f"发送邮件通知，主题: {subject}, 内容: {message}")
         # 打印smtp参数
         logger.debug(f"SMTP服务器: {self.smtp_server}, 端口: {self.smtp_port}")
         # 创建邮件对象
@@ -50,7 +50,7 @@ class EmailNotifier:
                 server.login(self.sender_email, self.sender_password)
                 logger.debug("登录成功")
                 server.send_message(msg)
-                logger.info("邮件通知发送成功")
+                logger.info("通知邮件发送完成。")
         except smtplib.SMTPAuthenticationError as e:
             logger.error(f"SMTP 认证错误: {str(e)}")
         except smtplib.SMTPConnectError as e:

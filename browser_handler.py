@@ -28,6 +28,7 @@ class BrowserHandler:
                 args=['--no-sandbox', '--disable-setuid-sandbox']  # 启动参数
             )
             # 设置浏览器上下文，包括语言设置
+            logger.debug("设置浏览器语言环境为英语")
             self.context = self.browser.new_context(
                 locale='en-US',  # 设置为英语
                 extra_http_headers={
@@ -42,107 +43,162 @@ class BrowserHandler:
             self.cleanup()  # 清理资源
             raise
 
-    def get_page_html(self):
-        """获取页面HTML内容"""
-        logger.info("正在获取页面HTML内容...")
+    def open_login_page(self, login_url):
+        """进行登录"""
+        logger.debug(f"导航到登录页:{login_url}...")
         try:
-            html_content = self.page.content()
-            logger.debug("页面HTML内容:")
-            logger.debug(html_content)
-            return html_content
+            response = self.page.goto(login_url, timeout=60000, wait_until='networkidle')
+            if not response:
+                raise Exception("页面加载失败: 无响应")
+            if response.status >= 400:
+                raise Exception(f"页面加载失败, 错误响应码: {response.status}")
+            logger.debug(f"成功加载登录页面, 状态码: {response.status}")
+        except PlaywrightTimeoutError as e:
+            logger.error(f"页面加载超时: {str(e)}")
+            raise
         except Exception as e:
-            logger.error(f"获取页面HTML失败: {str(e)}")
-            return None
+            logger.error(f"登录页面加载过程中出现错误: {str(e)}")
+            raise
 
     def get_page_info(self):
-        """获取页面信息，包括标题和响应头"""
-        logger.info("正在获取页面表单和标题信息...")
-        try:
+        """获取页面信息，包括标题和响应头"""        
+        try:            
             info = self.page.evaluate('''() => {
                 const titleElement = document.querySelector('title');
-                const forms = Array.from(document.forms).map(form => ({
-                    id: form.id,
-                    action: form.action,
-                    method: form.method,
-                    innerHTML: form.innerHTML
-                }));
-                const inputs = Array.from(document.querySelectorAll('input')).map(input => ({
-                    type: input.type,
-                    name: input.name,
-                    id: input.id,
-                    value: input.type !== 'password' ? input.value : '***'
-                }));
                 return {
-                    title: titleElement ? titleElement.textContent : '',
-                    url: window.location.href,
-                    forms: forms,
-                    inputs: inputs
+                    title: titleElement ? titleElement.textContent : 'not found',
+                    url: window.location.href
                 };
             }''')
             
-            logger.debug(f"页面信息 - 标题: {info['title']}")
-            logger.debug(f"页面信息 - URL: {info['url']}")
-            logger.debug("表单信息:")
-            for form in info['forms']:
-                logger.debug(f"  表单: id={form['id']}, action={form['action']}, method={form['method']}")
-            logger.debug("输入框信息:")
-            for input_field in info['inputs']:
-                logger.debug(f"  输入框: type={input_field['type']}, name={input_field['name']}, id={input_field['id']}, value={input_field['value']}")
-            
+            logger.debug(f"页面标题: {info['title']}, 页面URL: {info['url']}")            
             return info['title']
         except Exception as e:
             logger.error(f"获取页面信息失败: {str(e)}")
             return None
-
-    def analyze_page(self):
-        """分析页面内容，帮助调试"""
+    def gather_login_elements(self):
+        """获取页面HTML、页面信息, 并查找登录相关的元素"""        
         try:
+            html_content = self.page.content()
+            logger.debug(f"页面HTML内容:\n{str(html_content)}")   
+            # TODO 优化此处适应大多数网站的登录元素查找逻辑
+            # 获取页面信息
+            # info = self.page.evaluate('''() => {                
+            #     const forms = Array.from(document.forms).map(form => ({
+            #         id: form.id,
+            #         action: form.action,
+            #         method: form.method,
+            #         innerHTML: form.innerHTML
+            #     }));
+            #     const inputs = Array.from(document.querySelectorAll('input')).map(input => ({
+            #         type: input.type,
+            #         name: input.name,
+            #         id: input.id,
+            #         value: input.type !== 'password' ? input.value : '***'
+            #     }));
+            #     const buttons = Array.from(document.querySelectorAll('button[type="submit"]')).map(button => ({
+            #         type: button.type,
+            #         name: button.name,
+            #         id: button.id
+            #     }));
+            #     return {
+            #         forms: forms,
+            #         inputs: inputs,
+            #         buttons: buttons
+            #     };
+            # }''')
+            
+            # # 打印info调试信息
+            # logger.debug(f"表单数量: {len(info['forms'])}")
+            # for form in info['forms']:
+            #     logger.debug(f"表单ID: {form['id']}, 动作: {form['action']}, 方法: {form['method']}")
+            #     logger.debug(f"表单HTML: {form['innerHTML']}")
+            # logger.debug(f"输入字段数量: {len(info['inputs'])}")
+            # for input_field in info['inputs']:
+            #     logger.debug(f"字段类型: {input_field['type']}, 名称: {input_field['name']}, 值: {input_field['value']}, id: {input_field['id']}")  
+            # logger.debug(f"按钮数量: {len(info['buttons'])}")
+            # for button in info['buttons']:
+            #     logger.debug(f"按钮类型: {button['type']}, 名称: {button['name']}, id: {button['id']}")
+            
+
             # 获取所有按钮元素
-            buttons = self.page.query_selector_all('button[type="submit"]')
-            logger.debug(f"页面中找到 {len(buttons)} 个提交按钮")
-            for button in buttons:
-                text = button.evaluate('node => node.textContent')
-                logger.debug(f"按钮文本: {text}, id: {button.get_attribute('id')}, type: {button.get_attribute('type')}")
+            # buttons = self.page.query_selector_all('button[type="submit"]')
+            # logger.debug(f"页面中找到 {len(buttons)} 个提交按钮")
+            # for button in buttons:
+            #     text = button.evaluate('node => node.textContent')
+            #     logger.debug(f"按钮文本: {text}, id: {button.get_attribute('id')}, type: {button.get_attribute('type')}")
 
             # 获取所有表单元素
-            forms = self.page.query_selector_all('form')
-            logger.debug(f"页面中找到 {len(forms)} 个表单")
-            for form in forms:
-                logger.debug(f"表单action: {form.get_attribute('action')}, method: {form.get_attribute('method')}")
-                logger.debug(f"表单HTML: {form.inner_html()}")
+            # forms = self.page.query_selector_all('form')
+            # logger.debug(f"页面中找到 {len(forms)} 个表单")
+            # for form in forms:
+            #     logger.debug(f"表单action: {form.get_attribute('action')}, method: {form.get_attribute('method')}")
+            #     logger.debug(f"表单HTML: {form.inner_html()}")
 
             # 检查是否有错误信息显示
-            error_elements = self.page.query_selector_all('.alert-error, .alert-danger, .error-message')
-            for error in error_elements:
-                text = error.evaluate('node => node.textContent')
-                logger.debug(f"发现错误信息: {text}")
+            # error_elements = self.page.query_selector_all('.alert-error, .alert-danger, .error-message')
+            # for error in error_elements:
+            #     text = error.evaluate('node => node.textContent')
+            #     logger.debug(f"发现错误信息: {text}")
+
+            # 查询用户名和密码输入框，以及提交按钮
+            username_field = self.page.query_selector('#id_username')
+            password_field = self.page.query_selector('#id_password')
+            submit_button = self.page.query_selector('#submit')
+
+            # 等待用户名输入框
+            # logger.debug("等待用户名输入框...")
+            # username_field = self.page.wait_for_selector('#id_username', timeout=5000)
+            # if not username_field:
+            #     raise Exception("未找到用户名输入框")
+            
+            # 等待密码输入框
+            # logger.debug("等待密码输入框...")
+            # password_field = self.page.wait_for_selector('#id_password', timeout=5000)
+            # if not password_field:
+            #     raise Exception("未找到密码输入框")
+            
+            # 等待提交按钮
+            # logger.debug("等待提交按钮...")
+            # submit_button = self.page.wait_for_selector('#submit', timeout=5000)
+            # if not submit_button:
+            #     raise Exception("未找到提交按钮")
+
+            if not username_field or not password_field or not submit_button:
+                raise Exception("未找到登录所需的元素")
+
+            return username_field, password_field, submit_button
 
         except Exception as e:
-            logger.error(f"分析页面失败: {str(e)}")
-
+            logger.error(f"获取登录元素失败: {str(e)}")
+            return None, None, None, None
+   
     def check_login_status(self):
         """检查登录状态并获取详细信息"""
         try:
-            # 检查URL
-            current_url = self.page.url
-            logger.debug(f"当前URL: {current_url}")
-            
-            # 检查页面上的错误信息
+            # 获取当前 URL
+            current_url = self.page.url  
+
+            logger.info(f"检查登录状态: 当前页面: {current_url}")
+
+            # 执行 JavaScript 以获取错误信息和登录状态
             error_info = self.page.evaluate('''() => {
                 const errors = [];
-                // 检查常见的错误消息容器
+                // 常见的错误消息选择器
                 const errorSelectors = [
-                    '.alert-error', '.alert-danger', '.error-message',
-                    '#error-message', '.form-error', '.login-error'
+                    '.error', '.error-message', '#error-message',
+                    '.form-error', '.login-error','.login-error-message',
+                    '.alert', '.alert-error', '.alert-danger'
                 ];
-                
+
+                // 检查页面上的错误消息
                 for (const selector of errorSelectors) {
                     const element = document.querySelector(selector);
                     if (element && element.textContent.trim()) {
                         errors.push(element.textContent.trim());
                     }
                 }
-                
+
                 // 检查表单验证消息
                 const invalidInputs = document.querySelectorAll('input:invalid');
                 invalidInputs.forEach(input => {
@@ -150,20 +206,32 @@ class BrowserHandler:
                         errors.push(`${input.name}: ${input.validationMessage}`);
                     }
                 });
-                
+
                 return {
-                    url: window.location.href,
-                    errors: errors,
-                    isLoginPage: window.location.href.includes('/login/')
+                    errors: errors
                 };
             }''')
-            
-            logger.debug(f"登录状态检查结果: {error_info}")
+
+            # 记录错误检查的结果
+            if error_info['errors']:
+                logger.error(f"页面错误信息: {error_info['errors']}")
+            else:
+                logger.debug("页面未发现错误信息")
+
+            # 添加 URL 信息到结果中
+            error_info['url'] = current_url
+            error_info['isLoginPage'] = '/login/' in current_url
+
             return error_info
-            
+
         except Exception as e:
             logger.error(f"检查登录状态失败: {str(e)}")
-            return None
+            return {
+                'url': current_url,
+                'errors': [str(e)],
+                'isLoginPage': '/login/' in current_url
+            }
+
 
     def login(self, url, username, password, max_retries):
         """登录操作"""
@@ -179,89 +247,53 @@ class BrowserHandler:
                 
                 # 导航到登录页面，设置较长的超时时间
                 logger.info(f"登录到URL: {url}")
-                response = self.page.goto(url, timeout=60000, wait_until='networkidle')
-                if not response:
-                    raise Exception("页面加载失败")
-                if response.status >= 400:  # 只有状态码大于等于400才是错误
-                    raise Exception(f"页面加载失败，状态码: {response.status}")
-                
-                logger.debug(f"页面加载成功，状态码: {response.status}")
-                
-                # 获取页面HTML内容
-                html_content = self.get_page_html()
-                if not html_content:
-                    raise Exception("无法获取页面HTML内容")
-                
+                self.page.set_default_timeout(60000)
+
+                # 打开登录页面
+                logger.info("打开登录页面...")
+                self.open_login_page(url)  
+
                 # 获取登录页面标题和信息
                 page_titles['login'] = self.get_page_info()
                 
-                # 分析页面结构
-                self.analyze_page()
-                
-                # 等待用户名输入框
-                logger.debug("等待用户名输入框...")
-                username_field = self.page.wait_for_selector('#id_username', timeout=5000)
-                if not username_field:
-                    raise Exception("未找到用户名输入框")
-                
-                # 等待密码输入框
-                logger.debug("等待密码输入框...")
-                password_field = self.page.wait_for_selector('#id_password', timeout=5000)
-                if not password_field:
-                    raise Exception("未找到密码输入框")
+                # 获取页面输入元素
+                logger.info("查找登录元素...")
+                username_field, password_field, submit_button = self.gather_login_elements()
                 
                 # 填写用户名和密码
-                logger.debug("填写用户名和密码...")
+                logger.info("填写用户名和密码...")
                 username_field.fill(username)
-                password_field.fill(password)
-                
-                # 等待提交按钮
-                logger.debug("等待提交按钮...")
-                submit_button = self.page.wait_for_selector('#submit', timeout=5000)
-                if not submit_button:
-                    raise Exception("未找到提交按钮")
+                password_field.fill(password)                
                 
                 # 等待网络请求完成
-                logger.debug("点击提交按钮...")
+                logger.info("点击提交按钮...")
                 with self.page.expect_navigation(timeout=60000, wait_until='networkidle'):
                     submit_button.click()
                 
-                # 获取登录后页面标题
-                page_titles['after_login'] = self.get_page_info()
-                
                 # 检查登录状态
+                logger.info("检查登录状态...")
                 login_status = self.check_login_status()
+
+                if login_status['errors']:
+                    error_message = '; '.join(login_status['errors'])
+                    # 忽略错误信息
+                    # raise Exception(f"登录失败: {error_message}")       
                 
-                if login_status:
-                    if not login_status['isLoginPage']:
-                        logger.info("登录成功 - 已离开登录页面")
-                        return True, page_titles
-                    elif login_status['errors']:
-                        error_message = '; '.join(login_status['errors'])
-                        raise Exception(f"登录失败: {error_message}")
-                    else:
-                        # 检查是否有任何错误提示
-                        error_text = self.page.evaluate('''() => {
-                            const errorElements = document.querySelectorAll('.alert, .error, .alert-error, .alert-danger');
-                            for (const el of errorElements) {
-                                if (el.textContent.trim()) {
-                                    return el.textContent.trim();
-                                }
-                            }
-                            return null;
-                        }''')
-                        if error_text:
-                            raise Exception(f"登录失败: {error_text}")
-                        else:
-                            raise Exception("登录失败: 仍在登录页面但未发现具体错误信息")
-                
+                # 获取登录后页面标题
+                logger.info("页面加载完成,获取登录后页面标题...")
+                page_titles['after_login'] = self.get_page_info()
+                page_titles['url'] = login_status['url']
+
+                if not login_status['isLoginPage']:
+                    logger.info("登录成功 - 已离开登录页面")
+                    return True, page_titles
+                                
             except PlaywrightTimeoutError as e:
                 logger.error(f"登录尝试超时: {str(e)}")
                 retry_count += 1
                 if retry_count < max_retries:
                     logger.info(f"等待5秒后重试...")
-                    time.sleep(5)
-                
+                    time.sleep(5)                
             except Exception as e:
                 logger.error(f"登录尝试失败: {str(e)}")
                 retry_count += 1
