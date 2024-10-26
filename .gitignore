@@ -37,6 +37,6 @@ wheels/
 *.swp
 *.swo
 
-# ContinueAI prompts
+# AI generated files
 .prompts/
 .aider*
