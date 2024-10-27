@@ -82,6 +82,10 @@ def validate_env_vars():
     if missing_vars:
         raise ValueError(f"缺少必要的环境变量: {', '.join(missing_vars)}")
     
+    login_url = os.getenv('WEBSITE_URL')
+    if not login_url.startswith(('http://', 'https://')):
+            raise ValueError("WEBSITE_URL 必须以 http:// 或 https:// 开头")
+    
     # 检查配置项的值合法性
     schedule_type = os.getenv('LOGIN_SCHEDULE_TYPE')
     if schedule_type not in ['monthly', 'minutes']:

@@ -18,7 +18,7 @@ fi
 
 # 运行测试容器
 echo "启动测试容器..."
-docker run --rm --name ${CONTAINER_NAME} \
+docker run --name ${CONTAINER_NAME} \
     --env-file .env \
     -v $(pwd)/.env.test:/app/.env \
     ${IMAGE_NAME}:${TAG} \
@@ -35,3 +35,4 @@ fi
 # 清理容器
 echo "清理测试容器..."
 docker rm -f ${CONTAINER_NAME}
+echo "🎉 测试脚本执行完成！"
