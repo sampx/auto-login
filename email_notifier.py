@@ -12,7 +12,7 @@ class EmailNotifier:
         self.sender_password = os.getenv('EMAIL_PASSWORD')
         self.recipient_email = os.getenv('EMAIL_RECIPIENT')
         self.smtp_server = os.getenv('SMTP_SERVER')
-        self.smtp_port = int(os.getenv('SMTP_PORT'))
+        self.smtp_port = os.getenv('SMTP_PORT')
         self.logger.debug(f"EMAIL_SENDER: {self.sender_email}")
         self.logger.debug(f"EMAIL_PASSWORD: {self.sender_password}")
         self.logger.debug(f"EMAIL_RECIPIENT: {self.recipient_email}")
