@@ -221,6 +221,11 @@ function stopTask(taskId) {
 
 // 查看任务日志
 function viewTaskLogs(taskId) {
+    if (currentTask === taskId) {
+        // 如果点击的是同一个任务，则不重新加载日志
+        return;
+    }
+
     currentTask = taskId;
     
     // 更新日志标题
@@ -241,7 +246,7 @@ function viewTaskLogs(taskId) {
         if (currentTask === taskId) {
             loadTaskLogs(taskId, false);
         }
-    }, 2000);
+    }, 500);
 }
 
 // 刷新日志
