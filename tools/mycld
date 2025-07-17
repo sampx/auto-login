@@ -60,48 +60,59 @@ info_log() {
 # 解析命令行参数
 parse_arguments() {
     local config_set=false
+    local parsing_mycld_options=true
     
     while [[ $# -gt 0 ]]; do
-        case $1 in
-            -h|--help)
-                show_help
-                exit 0
-                ;;
-            -v|--verbose)
-                VERBOSE=true
-                verbose_log "启用详细输出模式"
-                shift
-                ;;
-            --k2)
-                if [[ "$config_set" == true ]]; then
-                    error_message "不能同时使用多个配置选项" "请只选择一个配置选项 (--k2 或 --anyrouter)"
-                    exit 1
-                fi
-                MODE="k2"
-                config_set=true
-                verbose_log "设置运行模式为 K2"
-                shift
-                ;;
-            --anyrouter)
-                if [[ "$config_set" == true ]]; then
-                    error_message "不能同时使用多个配置选项" "请只选择一个配置选项 (--k2 或 --anyrouter)"
-                    exit 1
-                fi
-                MODE="anyrouter"
-                config_set=true
-                verbose_log "设置运行模式为 AnyRouter"
-                shift
-                ;;
-            -*)
-                error_message "未知选项: $1" "使用 --help 查看可用选项"
-                exit 1
-                ;;
-            *)
-                # 剩余参数作为 claude 命令的参数
-                CLAUDE_ARGS+=("$1")
-                shift
-                ;;
-        esac
+        # 如果仍在解析 mycld 选项
+        if [[ "$parsing_mycld_options" == true ]]; then
+            case $1 in
+                -h|--help)
+                    show_help
+                    exit 0
+                    ;;
+                -v|--verbose)
+                    VERBOSE=true
+                    verbose_log "启用详细输出模式"
+                    shift
+                    continue
+                    ;;
+                --k2)
+                    if [[ "$config_set" == true ]]; then
+                        error_message "不能同时使用多个配置选项" "请只选择一个配置选项 (--k2 或 --anyrouter)"
+                        exit 1
+                    fi
+                    MODE="k2"
+                    config_set=true
+                    verbose_log "设置运行模式为 K2"
+                    shift
+                    continue
+                    ;;
+                --anyrouter)
+                    if [[ "$config_set" == true ]]; then
+                        error_message "不能同时使用多个配置选项" "请只选择一个配置选项 (--k2 或 --anyrouter)"
+                        exit 1
+                    fi
+                    MODE="anyrouter"
+                    config_set=true
+                    verbose_log "设置运行模式为 AnyRouter"
+                    shift
+                    continue
+                    ;;
+                --)
+                    # 双破折号表示 mycld 选项结束
+                    parsing_mycld_options=false
+                    shift
+                    continue
+                    ;;
+            esac
+        fi
+        
+        # 所有其他参数（包括以 - 开头的）都传递给 claude
+        CLAUDE_ARGS+=("$1")
+        shift
+        
+        # 一旦我们开始收集 claude 参数，就不再解析 mycld 选项
+        parsing_mycld_options=false
     done
     
     # 如果没有设置配置模式，则为直接模式
