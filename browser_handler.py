@@ -5,10 +5,13 @@ from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeo
 import time
 
 class BrowserHandler:
-    def __init__(self):
-        """初始化浏览器处理类"""
-        from logger_helper import LoggerHelper
-        self.logger = LoggerHelper.get_logger(__name__)  
+    def __init__(self, logger=None):
+        if logger:
+            self.logger = logger
+        else:
+            from logger_helper import LoggerHelper
+            # 默认使用系统日志记录器
+            self.logger = LoggerHelper.get_system_logger("browser_handler")  
         self.browser = None  # 浏览器实例
         self.context = None  # 浏览器上下文
         self.page = None  # 页面实例

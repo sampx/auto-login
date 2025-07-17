@@ -32,5 +32,12 @@ COPY . .
 # 创建 logs 目录
 RUN mkdir -p /app/logs
 
-# 运行应用
-CMD ["python", "auto_login.py"]
+# 设置入口点脚本权限
+COPY docker_entrypoint.sh /app/
+RUN chmod +x /app/docker_entrypoint.sh
+
+# 暴露Web界面端口
+EXPOSE 5001
+
+# 设置入口点
+ENTRYPOINT ["/app/docker_entrypoint.sh"]

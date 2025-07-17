@@ -6,7 +6,7 @@ import os
 class EmailNotifier:
     def __init__(self):
         from logger_helper import LoggerHelper
-        self.logger = LoggerHelper.get_logger(__name__)        
+        self.logger = LoggerHelper.get_system_logger(__name__)        
         # 初始化发件人邮箱、密码、收件人邮箱、SMTP服务器和端口
         self.sender_email = os.getenv('EMAIL_SENDER')
         self.sender_password = os.getenv('EMAIL_PASSWORD')

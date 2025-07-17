@@ -1,0 +1,286 @@
+#!/bin/bash
+
+# mycld - Claude CLI 启动器
+# 用于在终端中启动 claude cli 工具，支持不同的配置环境
+
+# 全局变量
+MODE=""
+VERBOSE=false
+CLAUDE_ARGS=()
+
+# 配置文件路径
+CONFIG_DIR="$HOME/tools/mac_zsh"
+K2_CONFIG="$CONFIG_DIR/k2.zrc"
+ANYROUTER_CONFIG="$CONFIG_DIR/anyrouter.zrc"
+
+# 必需的环境变量（仅在配置模式下）
+REQUIRED_VARS=("ANTHROPIC_BASE_URL" "ANTHROPIC_AUTH_TOKEN")
+
+# 显示帮助信息
+show_help() {
+    cat << EOF
+mycld - Claude CLI 启动器
+
+用法:
+    mycld [选项] [claude参数...]
+
+选项:
+    --k2            使用 K2 配置启动
+    --anyrouter     使用 AnyRouter 配置启动
+    -v, --verbose   显示详细输出
+    -h, --help      显示此帮助信息
+
+示例:
+    mycld                           # 直接启动 claude
+    mycld --k2 chat                 # 使用 K2 配置启动 claude chat
+    mycld --anyrouter --verbose     # 使用 AnyRouter 配置并显示详细信息
+EOF
+}
+
+# 显示错误信息
+error_message() {
+    echo "❌ 错误: $1" >&2
+    if [[ -n "$2" ]]; then
+        echo "💡 建议: $2" >&2
+    fi
+}
+
+# 详细输出日志
+verbose_log() {
+    if [[ "$VERBOSE" == true ]]; then
+        echo "🔍 [DEBUG] $1" >&2
+    fi
+}
+
+# 信息日志
+info_log() {
+    echo "ℹ️  $1" >&2
+}
+
+# 解析命令行参数
+parse_arguments() {
+    local config_set=false
+    
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                show_help
+                exit 0
+                ;;
+            -v|--verbose)
+                VERBOSE=true
+                verbose_log "启用详细输出模式"
+                shift
+                ;;
+            --k2)
+                if [[ "$config_set" == true ]]; then
+                    error_message "不能同时使用多个配置选项" "请只选择一个配置选项 (--k2 或 --anyrouter)"
+                    exit 1
+                fi
+                MODE="k2"
+                config_set=true
+                verbose_log "设置运行模式为 K2"
+                shift
+                ;;
+            --anyrouter)
+                if [[ "$config_set" == true ]]; then
+                    error_message "不能同时使用多个配置选项" "请只选择一个配置选项 (--k2 或 --anyrouter)"
+                    exit 1
+                fi
+                MODE="anyrouter"
+                config_set=true
+                verbose_log "设置运行模式为 AnyRouter"
+                shift
+                ;;
+            -*)
+                error_message "未知选项: $1" "使用 --help 查看可用选项"
+                exit 1
+                ;;
+            *)
+                # 剩余参数作为 claude 命令的参数
+                CLAUDE_ARGS+=("$1")
+                shift
+                ;;
+        esac
+    done
+    
+    # 如果没有设置配置模式，则为直接模式
+    if [[ -z "$MODE" ]]; then
+        MODE="direct"
+        verbose_log "设置运行模式为直接模式"
+    fi
+    
+    verbose_log "解析完成，模式: $MODE, Claude参数: ${CLAUDE_ARGS[*]}"
+}
+
+# 验证环境
+validate_environment() {
+    verbose_log "开始验证环境..."
+    
+    # 检查 claude 命令是否安装
+    if ! command -v claude &> /dev/null; then
+        error_message "未找到 claude 命令" "请先安装 Claude CLI: https://github.com/anthropics/claude-cli"
+        return 1
+    fi
+    verbose_log "Claude CLI 已安装"
+    
+    # 根据模式验证环境变量
+    if [[ "$MODE" != "direct" ]]; then
+        # 配置模式下验证必要的环境变量
+        local missing_vars=()
+        for var in "${REQUIRED_VARS[@]}"; do
+            if [[ -z "${!var}" ]]; then
+                missing_vars+=("$var")
+            fi
+        done
+        
+        if [[ ${#missing_vars[@]} -gt 0 ]]; then
+            error_message "缺少必要的环境变量: ${missing_vars[*]}" "请确保在配置文件中设置了这些变量"
+            return 1
+        fi
+        verbose_log "所有必要的环境变量已设置"
+    else
+        # 直接模式下清除配置环境变量
+        for var in "${REQUIRED_VARS[@]}"; do
+            if [[ -n "${!var}" ]]; then
+                info_log "直接模式下清除环境变量: $var"
+                unset "$var"
+            fi
+        done
+        verbose_log "直接模式下已清除所有配置环境变量"
+    fi
+    
+    verbose_log "环境验证通过"
+    return 0
+}
+
+# 加载配置文件
+load_configuration() {
+    verbose_log "开始加载配置..."
+    
+    if [[ "$MODE" == "direct" ]]; then
+        verbose_log "直接模式，不加载配置文件"
+        return 0
+    fi
+    
+    local config_file=""
+    local config_name=""
+    
+    case "$MODE" in
+        k2)
+            config_file="$K2_CONFIG"
+            config_name="K2"
+            ;;
+        anyrouter)
+            config_file="$ANYROUTER_CONFIG"
+            config_name="AnyRouter"
+            ;;
+    esac
+    
+    verbose_log "尝试加载 $config_name 配置文件: $config_file"
+    
+    if [[ ! -f "$config_file" ]]; then
+        error_message "$config_name 配置文件不存在: $config_file" "请创建配置文件或检查路径"
+        return 1
+    fi
+    
+    if [[ ! -r "$config_file" ]]; then
+        error_message "$config_name 配置文件无法读取: $config_file" "请检查文件权限"
+        return 1
+    fi
+    
+    # 加载配置文件
+    verbose_log "正在加载配置文件: $config_file"
+    source "$config_file"
+    
+    if [[ $? -ne 0 ]]; then
+        error_message "加载配置文件失败: $config_file" "请检查文件格式是否正确"
+        return 1
+    fi
+    
+    info_log "成功加载 $config_name 配置"
+    
+    # 验证加载后的环境变量
+    validate_environment
+    return $?
+}
+
+# 启动 Claude CLI
+# 该函数使用 exec 启动 claude 命令，替换当前进程
+# 如果 exec 成功，脚本将不会继续执行
+# 如果 exec 失败，将显示错误信息并返回错误码
+launch_claude() {
+    verbose_log "准备启动 Claude CLI，参数: ${CLAUDE_ARGS[*]}"
+    
+    if [[ ${#CLAUDE_ARGS[@]} -eq 0 ]]; then
+        info_log "启动 Claude CLI 交互模式"
+    else
+        info_log "启动 Claude CLI 并传递参数: ${CLAUDE_ARGS[*]}"
+    fi
+    
+    # 检查 claude 命令是否可执行
+    if ! command -v claude &> /dev/null; then
+        error_message "无法执行 claude 命令" "请确保 Claude CLI 已正确安装并在 PATH 中"
+        return 1
+    fi
+    
+    # 使用 exec 启动 claude 命令，替换当前进程
+    # 注意：如果 exec 成功，以下代码将不会执行
+    exec claude "${CLAUDE_ARGS[@]}"
+    
+    # 如果 exec 失败，显示错误信息
+    local exit_code=$?
+    error_message "启动 Claude CLI 失败，退出码: $exit_code" "请检查 Claude CLI 安装和参数是否正确"
+    return $exit_code
+}
+
+# 主函数
+main() {
+    verbose_log "开始执行 mycld 脚本"
+    
+    # 解析命令行参数
+    parse_arguments "$@"
+    
+    info_log "参数解析完成，运行模式: $MODE"
+    
+    if [[ "$VERBOSE" == true ]]; then
+        echo "🔍 [DEBUG] 当前配置:"
+        echo "  - 模式: $MODE"
+        echo "  - 详细输出: $VERBOSE"
+        echo "  - Claude参数: ${CLAUDE_ARGS[*]}"
+    fi
+    
+    # 加载配置文件
+    if ! load_configuration; then
+        exit 1
+    fi
+    
+    # 验证环境
+    if ! validate_environment; then
+        exit 1
+    fi
+    
+    # 显示成功信息和当前模式
+    case "$MODE" in
+        direct)
+            echo "✅ 使用直接模式启动 Claude CLI"
+            ;;
+        k2)
+            echo "✅ 使用 K2 配置启动 Claude CLI"
+            ;;
+        anyrouter)
+            echo "✅ 使用 AnyRouter 配置启动 Claude CLI"
+            ;;
+    esac
+    
+    # 启动 Claude CLI
+    launch_claude
+    
+    # 如果 launch_claude 返回（通常是因为出错），则退出
+    exit $?
+}
+
+# 脚本入口点
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi

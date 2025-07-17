@@ -21,6 +21,8 @@ echo "启动容器..."
 docker run -d --name ${CONTAINER_NAME} \
     --env-file .env \
     -v $(pwd)/.env:/app/.env \
-    ${IMAGE_NAME}:${TAG} 
+    -v $(pwd)/logs:/app/logs \
+    -p 5001:5001 \
+    ${IMAGE_NAME}:${TAG}
 
 echo "容器启动完成！"
