@@ -1,0 +1,26 @@
+[
+    {
+        "task_id": "demo_hello",
+        "task_name": "Hello World 演示",
+        "task_exec": "echo 'Hello from Scheduler Engine!'",
+        "task_schedule": "0 9 * * *",
+        "task_desc": "简单的Hello World演示任务",
+        "task_timeout": 30
+    },
+    {
+        "task_id": "demo_file",
+        "task_name": "文件创建任务",
+        "task_exec": "touch logs/demo_$(date +%Y%m%d_%H%M%S).txt",
+        "task_schedule": "*/5 * * * *",
+        "task_desc": "每5分钟创建一个文件",
+        "task_timeout": 60
+    },
+    {
+        "task_id": "demo_python",
+        "task_name": "Python脚本任务",
+        "task_exec": "python tasks/test_task.py --demo=python",
+        "task_schedule": "0 */2 * * *",
+        "task_desc": "每2小时执行Python脚本",
+        "task_timeout": 120
+    }
+]

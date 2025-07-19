@@ -1,3 +1,7 @@
+---
+inclusion: always
+---
+
 # Product Overview
 
 ## Automated Website Login System
@@ -29,7 +33,26 @@ All settings are managed through environment variables in `.env` file, including
 - Retry parameters
 - Logging levels
 
+## Code Conventions
+
+- **Error Handling**: All browser interactions must include proper error handling with retries
+- **Logging**: Use the logger_helper module for all logging operations
+- **Environment Variables**: All configurable parameters should be accessed via environment variables
+- **Process Management**: Use the process_manager module for any process-related operations
+- **Task Structure**: New tasks should follow the pattern established in existing task modules
+
+## Architecture Patterns
+
+- **Separation of Concerns**: Each module has a single responsibility
+- **Configuration Externalization**: All settings stored in environment variables
+- **Dependency Injection**: Components receive their dependencies rather than creating them
+- **Event-Driven**: Use signals and events for inter-component communication
+- **Graceful Shutdown**: All components must handle termination signals properly
+
 ## AI Assistant Language Requirements
 
-- Please always reply to the user in Chinese
-- Comments in code and git commit messages should always be in English
+- Reply to users in Chinese
+- Write code comments and git commit messages in English
+- Follow snake_case naming for functions and variables
+- Follow PascalCase for class names
+- Document all public functions with docstrings

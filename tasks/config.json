@@ -1,0 +1,34 @@
+{
+  "tasks": [
+    {
+      "task_id": "test_task",
+      "task_name": "测试任务",
+      "task_exec": "python tasks/test_task.py",
+      "task_schedule": "*/1 * * * *",
+      "task_desc": "默认测试任务",
+      "task_timeout": 300,
+      "task_retry": 0,
+      "task_retry_interval": 60,
+      "task_enabled": true,
+      "task_log": "logs/task_test_task.log",
+      "task_env": {},
+      "task_dependencies": [],
+      "task_notify": {}
+    },
+    {
+      "task_id": "api_test",
+      "task_name": "API测试任务",
+      "task_exec": "python tasks/test_task.py --api-test",
+      "task_schedule": "*/10 * * * *",
+      "task_desc": "通过API创建的测试任务",
+      "task_timeout": 120,
+      "task_retry": 0,
+      "task_retry_interval": 60,
+      "task_enabled": true,
+      "task_log": "logs/task_api_test.log",
+      "task_env": {},
+      "task_dependencies": [],
+      "task_notify": {}
+    }
+  ]
+}

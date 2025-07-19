@@ -110,6 +110,7 @@ def get_task_status(task_id):
         logger.error(f"获取任务状态失败: {str(e)}")
         return jsonify({"success": False, "message": str(e)}), 500
 
+
 # API路由 - 获取系统配置
 @app.route('/api/config', methods=['GET'])
 def get_config():
@@ -210,8 +211,10 @@ signal.signal(signal.SIGINT, signal_handler)
 # 主函数
 if __name__ == '__main__':
     try:
-        logger.info("启动Web任务管理器...")
-        app.run(host='0.0.0.0', port=5001, debug=False)
+        # 从环境变量获取端口，默认5001
+        port = int(os.getenv('WEB_PORT', 5001))
+        logger.info(f"启动Web任务管理器...端口: {port}")
+        app.run(host='0.0.0.0', port=port, debug=False)
     except Exception as e:
         logger.error(f"Web任务管理器启动失败: {str(e)}")
     finally:

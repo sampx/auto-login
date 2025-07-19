@@ -16,17 +16,19 @@ from logger_helper import LoggerHelper
 class Task:
     """任务模型类，表示一个自动登录任务"""
     
-    def __init__(self, task_id: str, name: str, description: str, config: Dict[str, Any]):
+    def __init__(self, task_id: str, name: str, description: str, config: Dict[str, Any], command: str = None):
         self.id = task_id
         self.name = name
         self.description = description
         self.status = "stopped"  # 初始状态为停止
         self.config = config
+        self.command = command or "python auto_login.py"  # 默认执行命令
         self.process = None
         self.pid = None
         self.last_run = None
         self.next_run = None
         self.schedule = self._format_schedule()
+        self.enabled = True  # 任务是否启用
         
     def _format_schedule(self) -> str:
         """格式化调度信息为人类可读的字符串"""
@@ -69,7 +71,8 @@ class TaskManager:
                 "LOGIN_SCHEDULE_TYPE": os.getenv("LOGIN_SCHEDULE_TYPE"),
                 "LOGIN_SCHEDULE_DATE": os.getenv("LOGIN_SCHEDULE_DATE"),
                 "LOGIN_SCHEDULE_TIME": os.getenv("LOGIN_SCHEDULE_TIME")
-            }
+            },
+            command="python auto_login.py"
         )
         
         self.tasks[default_task.id] = default_task
@@ -83,7 +86,9 @@ class TaskManager:
                 "id": task.id,
                 "name": task.name,
                 "description": task.description,
+                "command": task.command,
                 "status": task.status,
+                "enabled": task.enabled,
                 "schedule": task.schedule,
                 "last_run": task.last_run.isoformat() if task.last_run else None,
                 "next_run": task.next_run.isoformat() if task.next_run else None
@@ -100,7 +105,9 @@ class TaskManager:
             "id": task.id,
             "name": task.name,
             "description": task.description,
+            "command": task.command,
             "status": task.status,
+            "enabled": task.enabled,
             "schedule": task.schedule,
             "last_run": task.last_run.isoformat() if task.last_run else None,
             "next_run": task.next_run.isoformat() if task.next_run else None,
@@ -114,6 +121,9 @@ class TaskManager:
             task = self.tasks.get(task_id)
             if not task:
                 return {"success": False, "message": f"任务 {task_id} 不存在"}
+                
+            if not task.enabled:
+                return {"success": False, "message": f"任务 {task_id} 已被禁用，无法启动"}
                 
             if task.status == "running":
                 return {"success": False, "message": f"任务 {task_id} 已经在运行中"}
@@ -264,6 +274,7 @@ class TaskManager:
         return {
             "success": True,
             "status": task.status,
+            "enabled": task.enabled,
             "last_run": task.last_run.isoformat() if task.last_run else None,
             "next_run": task.next_run.isoformat() if task.next_run else None
         }
@@ -330,6 +341,31 @@ class TaskManager:
             task.process = None
             task.pid = None
         
+    def toggle_task_enabled(self, task_id: str, enabled: bool) -> Dict[str, Any]:
+        """启用或禁用任务"""
+        with threading.Lock():
+            task = self.tasks.get(task_id)
+            if not task:
+                return {"success": False, "message": f"任务 {task_id} 不存在"}
+                
+            if task.enabled == enabled:
+                status_text = "启用" if enabled else "禁用"
+                return {"success": False, "message": f"任务已经是{status_text}状态"}
+                
+            # 如果任务正在运行，先停止它
+            if task.status == "running" and not enabled:
+                self.stop_task(task_id)
+                
+            task.enabled = enabled
+            status_text = "启用" if enabled else "禁用"
+            self.logger.info(f"任务 {task_id} 已{status_text}")
+            
+            return {
+                "success": True, 
+                "message": f"任务 {task_id} 已{status_text}",
+                "enabled": task.enabled
+            }
+
     def cleanup(self):
         """清理资源，停止所有任务"""
         for task_id in list(self.tasks.keys()):

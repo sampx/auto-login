@@ -89,20 +89,35 @@ function renderTaskList(tasks) {
     let html = '<ul class="task-list">';
     
     tasks.forEach(task => {
+        // 确保任务ID不为null
+        const taskId = task.id || 'auto_login';
+        const isEnabled = task.enabled !== false;
+        const statusClass = getStatusClass(task.status, isEnabled);
+        const statusText = getStatusText(task.status, isEnabled);
+        
         html += `
-            <li class="task-item" data-task-id="${task.id}" onclick="viewTaskLogs('${task.id}')">
-                <div class="task-info">
+            <li class="task-item ${!isEnabled ? 'task-disabled' : ''}" data-task-id="${taskId}" onclick="viewTaskLogs('${taskId}')">
+                <div class="task-header">
+                    <div class="task-id">${taskId}</div>
                     <div class="task-name">${task.name}</div>
-                    <div class="task-description">${task.description}</div>
-                    <div class="task-schedule">调度: ${task.schedule}</div>
+                </div>
+                <div class="task-description">${task.description || '无描述'}</div>
+                <div class="task-command">
+                    <strong>命令:</strong> <code>${task.command || 'python auto_login.py'}</code>
+                </div>
+                <div class="task-schedule">
+                    <strong>调度:</strong> ${task.schedule || '未知调度'}
                 </div>
                 <div class="task-actions">
-                    <span class="task-status ${task.status === 'running' ? 'status-running' : 'status-stopped'}">
-                        ${task.status === 'running' ? '运行中' : '已停止'}
-                    </span>
-                    ${task.status === 'running' 
-                        ? '<button class="btn btn-danger btn-sm stop-task">停止</button>'
-                        : '<button class="btn btn-success btn-sm start-task">启动</button>'}
+                    <span class="task-status ${statusClass}">${statusText}</span>
+                    <div class="action-buttons">
+                        ${isEnabled && task.status === 'running' 
+                            ? '<button class="btn btn-danger btn-sm stop-task" onclick="event.stopPropagation(); stopTask(\'' + taskId + '\')">停止</button>'
+                            : isEnabled 
+                                ? '<button class="btn btn-success btn-sm start-task" onclick="event.stopPropagation(); startTask(\'' + taskId + '\')">启动</button>'
+                                : '<button class="btn btn-secondary btn-sm" disabled>已禁用</button>'
+                        }
+                    </div>
                 </div>
             </li>
         `;
@@ -113,6 +128,36 @@ function renderTaskList(tasks) {
     
     // 绑定任务操作事件
     bindTaskEvents();
+}
+
+// 获取状态类名
+function getStatusClass(status, enabled) {
+    if (!enabled) {
+        return 'status-disabled';
+    }
+    switch (status) {
+        case 'running':
+            return 'status-running';
+        case 'stopped':
+            return 'status-stopped';
+        default:
+            return 'status-stopped';
+    }
+}
+
+// 获取状态文本
+function getStatusText(status, enabled) {
+    if (!enabled) {
+        return '禁用';
+    }
+    switch (status) {
+        case 'running':
+            return '运行中';
+        case 'stopped':
+            return '已停止';
+        default:
+            return '已停止';
+    }
 }
 
 // 绑定任务操作事件
@@ -143,6 +188,12 @@ let taskOperationInProgress = false;
 
 // 启动任务
 function startTask(taskId) {
+    // 防止无效的任务ID
+    if (!taskId || taskId === 'null') {
+        showMessage('无效的任务ID', 'danger');
+        return;
+    }
+    
     // 防止重复操作
     if (taskOperationInProgress) {
         console.log('操作正在进行中，请稍候...');
@@ -153,6 +204,11 @@ function startTask(taskId) {
     
     // 禁用所有按钮，防止重复点击
     const taskItem = document.querySelector(`[data-task-id="${taskId}"]`);
+    if (!taskItem) {
+        taskOperationInProgress = false;
+        return;
+    }
+    
     const buttons = taskItem.querySelectorAll('button');
     buttons.forEach(btn => btn.disabled = true);
     
@@ -190,6 +246,12 @@ function startTask(taskId) {
 
 // 停止任务
 function stopTask(taskId) {
+    // 防止无效的任务ID
+    if (!taskId || taskId === 'null') {
+        showMessage('无效的任务ID', 'danger');
+        return;
+    }
+    
     // 防止重复操作
     if (taskOperationInProgress) {
         console.log('操作正在进行中，请稍候...');
@@ -221,6 +283,11 @@ function stopTask(taskId) {
 
 // 查看任务日志
 function viewTaskLogs(taskId) {
+    if (!taskId || taskId === 'null') {
+        console.warn('无效的任务ID:', taskId);
+        return;
+    }
+    
     if (currentTask === taskId) {
         // 如果点击的是同一个任务，则不重新加载日志
         return;
@@ -258,6 +325,11 @@ function refreshLog() {
 
 // 加载任务日志
 function loadTaskLogs(taskId, showLoadingIndicator = true) {
+    if (!taskId || taskId === 'null') {
+        console.warn('无效的任务ID:', taskId);
+        return;
+    }
+    
     if (showLoadingIndicator) {
         showLoading('logViewer');
     }
@@ -348,11 +420,16 @@ function refreshTaskStatus() {
     taskItems.forEach(taskItem => {
         const taskId = taskItem.getAttribute('data-task-id');
         
+        // 防止 null 或 undefined 的任务ID
+        if (!taskId || taskId === 'null') {
+            return;
+        }
+        
         fetch(`/api/tasks/${taskId}/status`)
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    updateTaskStatus(taskItem, data.status);
+                    updateTaskStatus(taskItem, data.status, data.enabled);
                 }
             })
             .catch(error => {
@@ -362,40 +439,57 @@ function refreshTaskStatus() {
 }
 
 // 更新任务状态
-function updateTaskStatus(taskItem, status) {
+function updateTaskStatus(taskItem, status, enabled) {
     const statusElement = taskItem.querySelector('.task-status');
-    const actionButton = taskItem.querySelector('.btn-success, .btn-danger');
+    const startStopButton = taskItem.querySelector('.start-task, .stop-task');
+    const toggleButton = taskItem.querySelector('.toggle-task');
     
-    // 获取当前状态，用于检测是否有变化
-    const currentStatus = statusElement.textContent.trim() === '运行中' ? 'running' : 'stopped';
+    const currentStatus = statusElement.textContent.trim();
+    const newStatusText = getStatusText(status, enabled);
+    const newStatusClass = getStatusClass(status, enabled);
     
-    // 只有当状态发生变化时才更新UI
-    if (currentStatus !== status) {
-        if (status === 'running') {
-            statusElement.textContent = '运行中';
-            statusElement.className = 'task-status status-running';
-            
-            if (actionButton) {
-                actionButton.textContent = '停止';
-                actionButton.className = 'btn btn-danger btn-sm stop-task';
+    // 更新状态显示
+    statusElement.textContent = newStatusText;
+    statusElement.className = `task-status ${newStatusClass}`;
+    
+    // 更新启动/停止按钮
+    if (startStopButton) {
+        if (enabled) {
+            if (status === 'running') {
+                startStopButton.textContent = '停止';
+                startStopButton.className = 'btn btn-danger btn-sm stop-task';
+                startStopButton.disabled = false;
+            } else {
+                startStopButton.textContent = '启动';
+                startStopButton.className = 'btn btn-success btn-sm start-task';
+                startStopButton.disabled = false;
             }
         } else {
-            statusElement.textContent = '已停止';
-            statusElement.className = 'task-status status-stopped';
-            
-            if (actionButton) {
-                actionButton.textContent = '启动';
-                actionButton.className = 'btn btn-success btn-sm start-task';
-            }
+            startStopButton.textContent = '已禁用';
+            startStopButton.className = 'btn btn-secondary btn-sm';
+            startStopButton.disabled = true;
         }
-        
-        // 重新绑定事件
-        bindTaskEvents();
-        
-        // 如果状态从运行中变为已停止，可能是任务自动结束，显示提示
-        if (currentStatus === 'running' && status === 'stopped') {
-            showMessage('任务已自动结束', 'info');
-        }
+    }
+    
+    // 更新启用/禁用按钮
+    if (toggleButton) {
+        toggleButton.textContent = enabled ? '禁用' : '启用';
+        toggleButton.className = `btn ${enabled ? 'btn-warning' : 'btn-success'} btn-sm toggle-task`;
+    }
+    
+    // 更新任务项样式
+    if (enabled) {
+        taskItem.classList.remove('task-disabled');
+    } else {
+        taskItem.classList.add('task-disabled');
+    }
+    
+    // 重新绑定事件
+    bindTaskEvents();
+    
+    // 如果状态从运行中变为已停止，可能是任务自动结束，显示提示
+    if (currentStatus === '运行中' && status === 'stopped' && enabled) {
+        showMessage('任务已自动结束', 'info');
     }
 }
 
@@ -549,6 +643,47 @@ function clearLogs() {
         .catch(error => {
             showMessage(error.message || '清空日志失败', 'danger');
             loadTaskLogs(currentTask); // 重新加载日志
+        });
+}
+
+// 启用/禁用任务
+function toggleTask(taskId, enabled) {
+    // 防止无效的任务ID
+    if (!taskId || taskId === 'null') {
+        showMessage('无效的任务ID', 'danger');
+        return;
+    }
+    
+    // 防止重复操作
+    if (taskOperationInProgress) {
+        console.log('操作正在进行中，请稍候...');
+        return;
+    }
+    
+    taskOperationInProgress = true;
+    
+    const actionText = enabled ? '启用' : '禁用';
+    
+    fetch(`/api/tasks/${taskId}/toggle`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ enabled: enabled })
+    })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showMessage(data.message || `任务已${actionText}`, 'success');
+                loadTasks(); // 刷新任务列表
+            } else {
+                showMessage(data.message || `${actionText}任务失败`, 'danger');
+            }
+            taskOperationInProgress = false;
+        })
+        .catch(error => {
+            showMessage(error.message || `${actionText}任务失败`, 'danger');
+            taskOperationInProgress = false;
         });
 }
 

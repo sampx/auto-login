@@ -100,35 +100,46 @@ body {
 }
 
 .task-item {
-    border-bottom: 1px solid #e9ecef;
+    display: block;
+    margin-bottom: 15px;
     padding: 15px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    border: 1px solid #e9ecef;
+    border-radius: 5px;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: box-shadow 0.2s ease;
 }
 
-.task-item:last-child {
-    border-bottom: none;
+.task-item:hover {
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+    cursor: pointer;
 }
 
 .task-info {
-    flex-grow: 1;
+    margin-bottom: 12px;
 }
 
 .task-name {
     font-weight: bold;
-    margin-bottom: 5px;
+    color: #333;
+    margin-bottom: 8px;
+    font-size: 16px;
 }
 
 .task-description {
     color: #6c757d;
-    font-size: 0.9rem;
-    margin-bottom: 5px;
+    font-size: 14px;
+    margin-bottom: 6px;
+    word-wrap: break-word;
 }
 
 .task-schedule {
-    font-size: 0.85rem;
+    font-size: 13px;
     color: #495057;
+    background: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 3px;
+    display: inline-block;
 }
 
 .task-status {
@@ -148,6 +159,114 @@ body {
 .status-stopped {
     background-color: #f8d7da;
     color: #721c24;
+}
+
+.status-disabled {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+/* 任务列表项样式 */
+.task-item {
+    padding: 15px;
+    margin-bottom: 10px;
+    background-color: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.task-item:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transform: translateY(-1px);
+}
+
+.task-item.task-disabled {
+    opacity: 0.7;
+    background-color: #f8f9fa;
+    cursor: not-allowed;
+}
+
+.task-item.task-disabled:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+.task-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.task-id {
+    font-weight: bold;
+    color: #333;
+    font-size: 14px;
+    font-family: monospace;
+    background-color: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.task-name {
+    font-weight: bold;
+    color: #007bff;
+    font-size: 16px;
+}
+
+.task-description {
+    color: #666;
+    font-size: 14px;
+    margin-bottom: 10px;
+    line-height: 1.4;
+}
+
+.task-command {
+    margin-bottom: 8px;
+    font-size: 13px;
+}
+
+.task-command code {
+    background-color: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    color: #e83e8c;
+    word-break: break-all;
+}
+
+.task-schedule {
+    margin-bottom: 10px;
+    font-size: 13px;
+    color: #6c757d;
+}
+
+.task-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+
+/* 按钮组样式 */
+.btn-warning {
+    color: #212529;
+    background-color: #ffc107;
+    border-color: #ffc107;
+}
+
+.btn-warning:hover {
+    background-color: #e0a800;
+    border-color: #d39e00;
 }
 
 .task-actions {
@@ -177,6 +296,43 @@ body {
     color: #fff;
     background-color: #007bff;
     border-color: #007bff;
+}
+
+/* 任务状态样式 */
+.task-disabled {
+    opacity: 0.7;
+    background-color: #f8f9fa !important;
+}
+
+.task-status {
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.task-status.status-disabled {
+    background-color: #dc3545;
+    color: white;
+}
+
+.task-status.status-enabled {
+    background-color: #28a745;
+    color: white;
+}
+
+.task-item {
+    transition: all 0.2s ease;
+}
+
+.task-item:hover {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transform: translateY(-1px);
+}
+
+.task-item.task-disabled:hover {
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    transform: translateY(0);
 }
 
 .btn-primary:hover {
