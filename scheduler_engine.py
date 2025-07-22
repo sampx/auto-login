@@ -50,6 +50,26 @@ class Task:
         return (self.task_enabled != other.task_enabled or
                 self.task_schedule != other.task_schedule or
                 self.task_exec != other.task_exec)
+                
+    def __eq__(self, other):
+        """比较两个任务是否相等，用于判断任务是否有变更"""
+        if not isinstance(other, Task):
+            return False
+        
+        # 比较所有字段
+        return (self.task_id == other.task_id and
+                self.task_name == other.task_name and
+                self.task_exec == other.task_exec and
+                self.task_schedule == other.task_schedule and
+                self.task_desc == other.task_desc and
+                self.task_timeout == other.task_timeout and
+                self.task_retry == other.task_retry and
+                self.task_retry_interval == other.task_retry_interval and
+                self.task_enabled == other.task_enabled and
+                self.task_log == other.task_log and
+                self.task_env == other.task_env and
+                self.task_dependencies == other.task_dependencies and
+                self.task_notify == other.task_notify)
 
 @dataclass
 class TaskExecution:
@@ -281,6 +301,15 @@ class TaskExecutor:
             if process.returncode == 0:
                 execution.status = "success"
                 self.logger.info(f"任务 {task.task_id} 执行成功")
+            elif process.returncode == -15:  # SIGTERM 信号，表示进程被正常终止
+                execution.status = "terminated"
+                execution.error_message = "任务因参数变化或配置更新而终止"
+                self.logger.info(f"任务 {task.task_id} 因参数变化或配置更新而终止执行")
+                # 在任务日志中记录终止原因
+                log_file.write("\n========================================\n")
+                log_file.write("任务因参数变化或配置更新而终止执行\n")
+                log_file.write("========================================\n")
+                log_file.flush()
             else:
                 execution.status = "failed"
                 execution.error_message = f"返回码: {process.returncode}"
@@ -325,6 +354,52 @@ class TaskExecutor:
                 self.logger.warning(f"强制终止任务执行 {execution_id}")
                 return True
         return False
+        
+    def stop_all_tasks_by_id(self, task_id: str) -> int:
+        """停止指定任务ID的所有正在执行的进程
+        
+        Args:
+            task_id: 任务ID
+            
+        Returns:
+            int: 停止的进程数量
+        """
+        stopped_count = 0
+        execution_ids_to_stop = []
+        
+        # 记录更详细的日志，包括当前运行的进程数量
+        process_count = len(self.running_processes)
+        self.logger.info(f"正在查找任务 {task_id} 的正在执行进程，当前运行进程总数: {process_count}")
+        
+        # 由于我们无法直接从进程对象获取任务ID，我们需要停止所有正在运行的进程
+        # 这确保了任务更新时不会有旧的进程继续运行
+        if process_count > 0:
+            self.logger.info(f"发现 {process_count} 个正在运行的进程，将停止与任务 {task_id} 相关的进程")
+            
+            # 遍历所有正在运行的进程
+            for exec_id, process in list(self.running_processes.items()):
+                pid = process.pid if hasattr(process, 'pid') else 'N/A'
+                self.logger.info(f"准备停止执行ID: {exec_id}, 进程PID: {pid}")
+                execution_ids_to_stop.append(exec_id)
+            
+            # 停止所有找到的执行
+            for exec_id in execution_ids_to_stop:
+                try:
+                    if self.stop_task(exec_id):
+                        stopped_count += 1
+                        self.logger.info(f"已成功停止执行ID: {exec_id}")
+                    else:
+                        self.logger.warning(f"停止执行ID: {exec_id} 失败，可能进程已经结束")
+                except Exception as e:
+                    self.logger.error(f"停止执行ID: {exec_id} 时发生异常: {e}")
+        
+        # 记录更详细的结果日志
+        if stopped_count > 0:
+            self.logger.info(f"已成功停止 {stopped_count} 个正在执行的进程（任务更新: {task_id}）")
+        else:
+            self.logger.info(f"任务 {task_id} 当前没有正在执行的进程被停止")
+        
+        return stopped_count
     
     def _clear_python_module_cache(self, task_exec: str):
         """清理Python模块缓存"""
@@ -455,27 +530,106 @@ class SchedulerEngine:
             fresh_tasks_dict = {task.task_id: task for task in self.task_loader.load_tasks()}
             current_task_ids = set(self.tasks.keys())
             fresh_task_ids = set(fresh_tasks_dict.keys())
+            
+            # 创建任务ID映射表，用于检测任务ID变更
+            # 通过比较任务的其他属性（如任务名称、执行命令等）来识别可能是ID变更的任务
+            id_mapping = {}
+            for old_id in current_task_ids - fresh_task_ids:
+                old_task = self.tasks[old_id]
+                for new_id in fresh_task_ids - current_task_ids:
+                    new_task = fresh_tasks_dict[new_id]
+                    # 如果任务名称和执行命令相同，认为是同一个任务但ID变更了
+                    if (old_task.task_name == new_task.task_name and 
+                        old_task.task_exec == new_task.task_exec):
+                        id_mapping[old_id] = new_id
+                        self.logger.info(f"检测到任务ID变更: {old_id} -> {new_id}")
+                        break
 
-            # 更新和检测变更
+            # 处理任务ID变更
+            for old_id, new_id in id_mapping.items():
+                self.logger.info(f"处理任务ID变更: {old_id} -> {new_id}")
+                
+                # 停止旧任务的所有执行计划
+                if self.scheduler.get_job(old_id):
+                    self.logger.info(f"移除旧任务 {old_id} 的调度计划")
+                    self.scheduler.remove_job(old_id)
+                
+                # 停止旧任务的所有正在执行的进程
+                stopped_count = self.task_executor.stop_all_tasks_by_id(old_id)
+                if stopped_count > 0:
+                    self.logger.info(f"已终止旧任务 {old_id} 的 {stopped_count} 个正在执行的进程")
+                
+                # 处理日志文件变更
+                old_task = self.tasks[old_id]
+                new_task = fresh_tasks_dict[new_id]
+                if old_task.task_log != new_task.task_log and os.path.exists(old_task.task_log):
+                    try:
+                        # 如果旧日志文件存在且与新日志文件不同，则删除旧日志文件
+                        os.remove(old_task.task_log)
+                        self.logger.info(f"已删除旧任务 {old_id} 的日志文件: {old_task.task_log}")
+                    except Exception as e:
+                        self.logger.warning(f"删除旧任务 {old_id} 的日志文件失败: {e}")
+                
+                # 从当前任务列表中移除旧任务
+                del self.tasks[old_id]
+                
+                # 将新任务添加到调度器
+                if new_task.task_enabled:
+                    self._add_task_to_scheduler(new_task)
+                self.tasks[new_id] = new_task
+
+            # 更新和检测变更（处理未变更ID的任务）
             for task_id in current_task_ids.intersection(fresh_task_ids):
                 fresh_task = fresh_tasks_dict[task_id]
-                if fresh_task.has_critical_changes(self.tasks[task_id]):
+                current_task = self.tasks[task_id]
+                
+                # 检查日志文件路径是否变更
+                if fresh_task.task_log != current_task.task_log and os.path.exists(current_task.task_log):
+                    try:
+                        # 如果旧日志文件存在且与新日志文件不同，则删除旧日志文件
+                        os.remove(current_task.task_log)
+                        self.logger.info(f"已删除任务 {task_id} 的旧日志文件: {current_task.task_log}")
+                    except Exception as e:
+                        self.logger.warning(f"删除任务 {task_id} 的旧日志文件失败: {e}")
+                
+                # 检查关键配置是否变更
+                if fresh_task.has_critical_changes(current_task):
                     self.logger.info(f"任务 {task_id} 的关键配置发生变更，将重新调度")
+                    
+                    # 停止该任务的调度计划
                     if self.scheduler.get_job(task_id):
                         self.scheduler.remove_job(task_id)
+                    
+                    # 停止该任务的所有正在执行的进程
+                    stopped_count = self.task_executor.stop_all_tasks_by_id(task_id)
+                    if stopped_count > 0:
+                        self.logger.info(f"已终止任务 {task_id} 的 {stopped_count} 个正在执行的进程")
+                    
+                    # 如果任务启用，重新添加到调度器
                     if fresh_task.task_enabled:
                         self._add_task_to_scheduler(fresh_task)
+                
+                # 更新任务配置
                 self.tasks[task_id] = fresh_task
 
-            # 删除任务
-            for task_id in current_task_ids - fresh_task_ids:
+            # 处理已删除的任务（排除已处理的ID变更任务）
+            for task_id in current_task_ids - fresh_task_ids - set(id_mapping.keys()):
                 self.logger.info(f"任务 {task_id} 已从配置文件中移除，将停止调度")
+                
+                # 停止该任务的调度计划
                 if self.scheduler.get_job(task_id):
                     self.scheduler.remove_job(task_id)
+                
+                # 停止该任务的所有正在执行的进程
+                stopped_count = self.task_executor.stop_all_tasks_by_id(task_id)
+                if stopped_count > 0:
+                    self.logger.info(f"已终止任务 {task_id} 的 {stopped_count} 个正在执行的进程")
+                
+                # 从当前任务列表中移除
                 del self.tasks[task_id]
 
-            # 新增任务
-            for task_id in fresh_task_ids - current_task_ids:
+            # 处理新增任务（排除已处理的ID变更任务）
+            for task_id in fresh_task_ids - current_task_ids - set(id_mapping.values()):
                 fresh_task = fresh_tasks_dict[task_id]
                 self.logger.info(f"发现新任务 {task_id}，将添加到调度计划")
                 self.tasks[task_id] = fresh_task
@@ -502,6 +656,10 @@ class SchedulerEngine:
             if execution.status == "success":
                 # 退出码 0：成功，不重试
                 break
+            elif execution.status == "terminated":
+                # 任务被终止（如因参数变化），不重试
+                self.logger.info(f"任务 {current_task.task_id} 被终止，不进行重试")
+                break
             elif execution.return_code == 1:
                 # 退出码 1：业务失败，不重试
                 self.logger.info(f"任务 {current_task.task_id} 业务失败 (退出码: 1)，根据规范不进行重试")
@@ -514,6 +672,10 @@ class SchedulerEngine:
                 else:
                     self.logger.error(f"任务 {current_task.task_id} 技术失败，已达到最大重试次数 ({current_task.task_retry})")
                     break
+            elif execution.return_code == -15:  # 明确检查 SIGTERM 信号
+                # 任务被终止（如因参数变化），不重试
+                self.logger.info(f"任务 {current_task.task_id} 因参数变化或配置更新而终止，不进行重试")
+                break
             else:
                 # 其他退出码：按技术失败处理，可以重试
                 if attempt < current_task.task_retry:
@@ -545,9 +707,22 @@ class SchedulerEngine:
         if task_id not in self.tasks:
             return False
         try:
+            # 获取任务信息，用于日志文件处理
+            task = self.tasks[task_id]
+            
+            # 停止该任务的调度计划
             if self.scheduler.get_job(task_id):
                 self.scheduler.remove_job(task_id)
+                self.logger.info(f"已从调度器中移除任务 {task_id} 的计划")
+            
+            # 停止该任务的所有正在执行的进程
+            stopped_count = self.task_executor.stop_all_tasks_by_id(task_id)
+            if stopped_count > 0:
+                self.logger.info(f"已终止任务 {task_id} 的 {stopped_count} 个正在执行的进程")
+            
+            # 从任务列表中移除
             del self.tasks[task_id]
+            
             self._mark_api_operation()
             self.task_loader.save_tasks(list(self.tasks.values()))
             self.logger.info(f"成功移除任务: {task_id}")
@@ -577,22 +752,68 @@ class SchedulerEngine:
         task_dict['next_run_time'] = job.next_run_time.isoformat() if job and job.next_run_time else None
         return task_dict
     
+    # 用于防止短时间内重复更新同一任务
+    _task_update_timestamps = {}
+    _task_update_lock = threading.Lock()
+    
     def update_task(self, task: Task) -> bool:
         """更新任务"""
         if task.task_id not in self.tasks:
             return False
+            
+        # 防止短时间内重复更新同一任务
+        with self._task_update_lock:
+            current_time = time.time()
+            last_update_time = self._task_update_timestamps.get(task.task_id, 0)
+            if current_time - last_update_time < 1.0:  # 1秒内不重复处理同一任务的更新
+                self.logger.debug(f"任务 {task.task_id} 短时间内重复更新请求，已忽略")
+                return True
+            self._task_update_timestamps[task.task_id] = current_time
+            
         try:
             original_task = self.tasks[task.task_id]
-            if task == original_task:
+            
+            # 检查任务是否有变更
+            has_changes = not (task == original_task)
+            
+            if not has_changes:
                 self.logger.info(f"任务 {task.task_id} 无任何变更，跳过更新")
                 return True
-                
+            
+            self.logger.info(f"任务 {task.task_id} 配置发生变更，开始更新...")
+            
+            # 检查日志文件路径是否变更
+            if task.task_log != original_task.task_log and os.path.exists(original_task.task_log):
+                try:
+                    # 如果旧日志文件存在且与新日志文件不同，则删除旧日志文件
+                    os.remove(original_task.task_log)
+                    self.logger.info(f"已删除任务 {task.task_id} 的旧日志文件: {original_task.task_log}")
+                except Exception as e:
+                    self.logger.warning(f"删除任务 {task.task_id} 的旧日志文件失败: {e}")
+            
+            # 停止该任务的调度计划
             if self.scheduler.get_job(task.task_id):
                 self.scheduler.remove_job(task.task_id)
-                
+                self.logger.info(f"已从调度器中移除任务 {task.task_id} 的调度计划")
+            else:
+                self.logger.debug(f"任务 {task.task_id} 当前没有活动的调度计划")
+            
+            # 停止该任务的所有正在执行的进程
+            stopped_count = self.task_executor.stop_all_tasks_by_id(task.task_id)
+            if stopped_count > 0:
+                self.logger.info(f"已终止任务 {task.task_id} 的 {stopped_count} 个正在执行的进程")
+            else:
+                self.logger.debug(f"任务 {task.task_id} 当前没有正在执行的进程")
+            
+            # 更新任务配置
             self.tasks[task.task_id] = task
+            
+            # 如果任务启用，重新添加到调度器
             if task.task_enabled:
                 self._add_task_to_scheduler(task)
+                self.logger.info(f"已将任务 {task.task_id} 添加到调度计划")
+            else:
+                self.logger.debug(f"任务 {task.task_id} 已禁用，不会添加到调度计划")
             
             self._mark_api_operation()
             self.task_loader.save_tasks(list(self.tasks.values()))

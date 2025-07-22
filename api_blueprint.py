@@ -1,6 +1,7 @@
 
 import os
 import logging
+import time
 from flask import Blueprint, jsonify, request
 from dotenv import load_dotenv, set_key
 from scheduler_engine import SchedulerEngine, Task
@@ -128,6 +129,20 @@ def create_task():
 @api_bp.route('/api/scheduler/tasks/<task_id>', methods=['PUT'])
 def update_task(task_id):
     """更新任务配置"""
+    # 防止重复更新请求的简单机制
+    request_id = request.headers.get('X-Request-ID', '')
+    
+    # 使用线程本地存储来跟踪最近处理的请求
+    if not hasattr(update_task, '_last_requests'):
+        update_task._last_requests = {}
+    
+    # 如果是重复请求，直接返回成功
+    if request_id and request_id in update_task._last_requests:
+        last_time = update_task._last_requests[request_id]
+        if time.time() - last_time < 2.0:  # 2秒内的重复请求
+            logger.debug(f"API接口: 检测到重复更新请求 {request_id}，已忽略")
+            return jsonify({"success": True, "message": "任务更新成功（重复请求）"})
+    
     try:
         # 从引擎中获取原始任务
         existing_task_dict = scheduler_engine.get_task(task_id)
@@ -160,6 +175,15 @@ def update_task(task_id):
         # 使用更新后的完整任务对象进行更新
         if scheduler_engine.update_task(existing_task):
             logger.info(f"API接口: 成功更新任务 {task_id}")
+            
+            # 记录此请求已处理
+            if request_id:
+                update_task._last_requests[request_id] = time.time()
+                # 清理旧请求记录
+                for old_id in list(update_task._last_requests.keys()):
+                    if time.time() - update_task._last_requests[old_id] > 60:  # 60秒后清理
+                        del update_task._last_requests[old_id]
+                        
             return jsonify({"success": True, "message": "任务更新成功", "data": asdict(existing_task)})
         else:
             logger.warning(f"API接口: 更新任务 {task_id} 失败")
@@ -257,15 +281,17 @@ def get_task_logs(task_id):
             return jsonify({"success": False, "message": f"任务 {task_id} 不存在"}), 404
         
         log_file = task.get('task_log', f'logs/task_{task_id}.log')
+        logger.debug(f"API接口: 尝试读取任务 {task_id} 的日志文件: {log_file}")
+        
         if not os.path.exists(log_file):
             logger.debug(f"API接口: 任务 {task_id} 的日志文件不存在")
-            return jsonify({"success": True, "data": [], "message": "暂无日志"})
+            return jsonify({"success": True, "data": [], "message": "暂无日志", "log_file": log_file})
         
         with open(log_file, 'r', encoding='utf-8') as f:
             lines = f.readlines()
         lines = lines[-100:]
         logger.debug(f"API接口: 成功获取任务 {task_id} 的日志")
-        return jsonify({"success": True, "data": [{"line": i + 1, "content": line.strip()} for i, line in enumerate(lines)]})
+        return jsonify({"success": True, "data": [{"line": i + 1, "content": line.strip()} for i, line in enumerate(lines)], "log_file": log_file})
     except Exception as e:
         logger.error(f"API接口: 读取任务 {task_id} 日志时发生异常: {e}")
         return jsonify({"success": False, "message": f"读取日志失败: {e}"}), 500

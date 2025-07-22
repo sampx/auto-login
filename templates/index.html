@@ -490,13 +490,28 @@
                                 <label for="editTaskDesc">任务描述</label>
                                 <textarea id="editTaskDesc" name="task_desc" class="form-control"></textarea>
                             </div>
-                            <div class="form-group">
-                                <label for="editTaskEnabled">状态</label>
-                                <select id="editTaskEnabled" name="task_enabled" class="form-control">
-                                    <option value="true">启用</option>
-                                    <option value="false">禁用</option>
-                                </select>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="editTaskTimeout">超时时间（秒）</label>
+                                    <input type="number" id="editTaskTimeout" name="task_timeout" class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label for="editTaskRetry">重试次数</label>
+                                    <input type="number" id="editTaskRetry" name="task_retry" class="form-control">
+                                </div>
                             </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="editTaskRetryInterval">重试间隔（秒）</label>
+                                    <input type="number" id="editTaskRetryInterval" name="task_retry_interval" class="form-control">
+                                </div>
+                                <div class="form-group">
+                                    <label for="editTaskLog">日志文件</label>
+                                    <input type="text" id="editTaskLog" name="task_log" class="form-control">
+                                </div>
+                            </div>
+                            <!-- 移除状态字段，因为有单独的启用/禁用按钮 -->
+                            <input type="hidden" id="editTaskEnabled" name="task_enabled">
                             <div id="editTaskErrorMessage" class="text-danger" style="margin-bottom: 15px;"></div>
                             <button type="submit" class="btn btn-primary">保存更改</button>
                         </form>
@@ -522,5 +537,6 @@
 
     <!-- JavaScript -->
     <script src="/static/js/main.js"></script>
+    <script src="/static/js/fixed_main.js"></script>
 </body>
 </html>
