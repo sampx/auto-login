@@ -2,14 +2,14 @@
   "tasks": [
     {
       "task_id": "test_task",
-      "task_name": "测试任务",
+      "task_name": "\u6d4b\u8bd5\u4efb\u52a1",
       "task_exec": "python tasks/test_task.py",
       "task_schedule": "*/1 * * * *",
-      "task_desc": "默认测试任务",
+      "task_desc": "\u9ed8\u8ba4\u6d4b\u8bd5\u4efb\u52a1",
       "task_timeout": 300,
       "task_retry": 0,
       "task_retry_interval": 60,
-      "task_enabled": true,
+      "task_enabled": false,
       "task_log": "logs/task_test_task.log",
       "task_env": {},
       "task_dependencies": [],
@@ -17,16 +17,33 @@
     },
     {
       "task_id": "api_test",
-      "task_name": "API测试任务",
-      "task_exec": "python tasks/test_task.py --api-test",
+      "task_name": "\u6807\u51c6 python \u4efb\u52a1",
+      "task_exec": "python tasks/example_task_script.py success",
       "task_schedule": "*/10 * * * *",
-      "task_desc": "通过API创建的测试任务",
-      "task_timeout": 120,
+      "task_desc": "python \u4efb\u52a1\u811a\u672c\u793a\u4f8b",
+      "task_timeout": 300,
       "task_retry": 0,
       "task_retry_interval": 60,
-      "task_enabled": true,
+      "task_enabled": false,
       "task_log": "logs/task_api_test.log",
       "task_env": {},
+      "task_dependencies": [],
+      "task_notify": {}
+    },
+    {
+      "task_id": "claude_endpoint_check",
+      "task_name": "anyrouter api\u63a2\u6d4b",
+      "task_exec": "python tasks/claude_endpoint_check.py",
+      "task_schedule": "0 */3 * * *",
+      "task_desc": "\u68c0\u67e5 anyrouter api \u53ef\u7528\u6027",
+      "task_timeout": 30,
+      "task_retry": 1,
+      "task_retry_interval": 60,
+      "task_enabled": true,
+      "task_log": "logs/task_claude_endpoint_check.log",
+      "task_env": {
+        "_ENV_FILE": "/Users/sam/SynologyDrive/SyncFolder/tools/mac_zsh/cct.zrc"
+      },
       "task_dependencies": [],
       "task_notify": {}
     }

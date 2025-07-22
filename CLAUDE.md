@@ -9,22 +9,23 @@ Automated Login System that performs scheduled website logins with email notific
 ## Architecture
 
 **Core Components:**
+- `app.py` - The unified Flask web server, serving both old and new task management UIs and APIs.
+- `legacy_api_blueprint.py` - Blueprint for the old task management API (`/api/tasks/*`). Can be safely removed if the old functionality is no longer needed.
+- `api_blueprint.py` - Blueprint for the new scheduler API (`/api/scheduler/tasks/*`) and other core APIs like configuration and logging.
 - `auto_login.py` - Main scheduled login service with APScheduler
-- `web_interface.py` - Flask web UI for task management and configuration (OLD VERSION)
 - `browser_handler.py` - Playwright-based browser automation
 - `task_manager.py` - Process management for login tasks (OLD VERSION)
 - `email_notifier.py` - Email notification system (success/failure alerts)
 - `scheduler_engine.py` - Generic task scheduling engine for cron-based tasks (NEW VERSION)
-- `scheduler_api.py` - REST API for new task scheduler (NEW VERSION)
 
 **Version Information:**
-- **OLD VERSION**: `task_manager.py` + `web_interface.py` (legacy task management)
-- **NEW VERSION**: `scheduler_engine.py` + `scheduler_api.py` (new task scheduler)
+- **OLD VERSION**: `task_manager.py` + `legacy_api_blueprint.py` (legacy task management)
+- **NEW VERSION**: `scheduler_engine.py` + `api_blueprint.py` (new task scheduler)
 - **UI**: Both versions accessible via tabs in `templates/index.html`
 - **Guideline**: All new feature requests should be implemented in the NEW VERSION only， !!! DO NOT CHANGE THE OLD VERSON TASK MANAGER'S CODE !!!
 
 **Service Architecture:**
-- **Web Layer**: Flask REST API + Static frontend (port 5001)
+- **Web Layer**: A single Flask REST API + Static frontend (port 5001) serving all endpoints.
 - **Process Layer**: Subprocess management with signal handling and process groups
 - **Automation Layer**: Playwright browser automation (headless Chromium)
 - **Scheduling Layer**: APScheduler for cron/interval triggers
@@ -37,7 +38,7 @@ Automated Login System that performs scheduled website logins with email notific
 # Build and run
 ./build.sh                    # Build Docker image
 ./start.sh                    # Start scheduled login service
-./start_web_app.sh           # Start Flask web interface (port 5001)
+./start_web_app.sh           # Start the unified Flask web interface (port 5001)
 
 # Testing
 ./test.sh                     # Run all tests
@@ -56,8 +57,8 @@ cp .env.example .env
 
 # Run services
 python auto_login.py         # CLI scheduled service
-python web_interface.py      # Web UI (http://localhost:5001)
-python scheduler_engine.py   # Generic task scheduler
+python app.py                # Unified Web UI (http://localhost:5001)
+python scheduler_engine.py   # Generic task scheduler (can be run standalone for testing)
 
 # Test components
 python -m pytest test_*.py   # Run tests
@@ -102,7 +103,7 @@ python -m pytest test_*.py   # Run tests
 **Test URLs:**
 - Web UI: http://localhost:5001
 - API: http://localhost:5001/api/tasks (OLD VERSION TASKMANAGER)
-- API: http://localhost:5002/api/scheduler/tasks (NEW VERSION TASKSCHEDULER)
+- API: http://localhost:5001/api/scheduler/tasks (NEW VERSION TASKSCHEDULER)
 
 
 ## Security Notes

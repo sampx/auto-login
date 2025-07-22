@@ -1,3 +1,77 @@
+
+let serverConnected = true;
+
+// API 错误处理
+function handleApiError(error, context) {
+    console.error(`API Error (${context}):`, error);
+    if (serverConnected) {
+        serverConnected = false;
+        const indicator = document.getElementById('server-status-indicator');
+        if (indicator) {
+            indicator.style.display = 'flex';
+        }
+        
+        // 停止所有定时器
+        if (logRefreshInterval) {
+            clearInterval(logRefreshInterval);
+            logRefreshInterval = null;
+            // 更新旧版日志刷新按钮和旋转动画状态
+            const spinner = document.getElementById('log-refresh-spinner');
+            const stopBtn = document.getElementById('stop-log-refresh-btn');
+            const startBtn = document.getElementById('start-log-refresh-btn');
+            if (spinner) spinner.style.display = 'none';
+            if (stopBtn) stopBtn.style.display = 'none';
+            if (startBtn) startBtn.style.display = 'inline-block';
+        }
+        
+        if (newLogRefreshInterval) {
+            clearInterval(newLogRefreshInterval);
+            newLogRefreshInterval = null;
+            // 更新新版日志刷新按钮和旋转动画状态
+            const spinner = document.getElementById('new-log-refresh-spinner');
+            const stopBtn = document.getElementById('stop-new-log-refresh-btn');
+            const startBtn = document.getElementById('start-new-log-refresh-btn');
+            if (spinner) spinner.style.display = 'none';
+            if (stopBtn) stopBtn.style.display = 'none';
+            if (startBtn) startBtn.style.display = 'inline-block';
+        }
+        
+        if (statusRefreshInterval) {
+            clearInterval(statusRefreshInterval);
+            statusRefreshInterval = null;
+        }
+    }
+}
+
+// API 成功处理
+function handleApiSuccess() {
+    if (!serverConnected) {
+        serverConnected = true;
+        const indicator = document.getElementById('server-status-indicator');
+        if (indicator) {
+            indicator.style.display = 'none';
+        }
+        // 重新启动状态刷新定时器
+        statusRefreshInterval = setInterval(refreshTaskStatus, 5000);
+    }
+}
+
+// 包装 fetch 请求
+async function fetchApi(url, options, context) {
+    try {
+        const response = await fetch(url, options);
+        handleApiSuccess();
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return await response.json();
+    } catch (error) {
+        handleApiError(error, context);
+        throw error; // 重新抛出错误，以便调用者可以处理
+    }
+}
+
+
 // 全局变量
 let currentTask = null;
 let logRefreshInterval = null;
@@ -8,14 +82,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // 初始化标签页
     initTabs();
     
-    // 加载任务列表
+    // 加载老版本任务列表和配置
     loadTasks();
+    loadConfig();
     
     // 设置定时刷新任务状态
     statusRefreshInterval = setInterval(refreshTaskStatus, 5000);
-    
-    // 加载配置
-    loadConfig();
     
     // 绑定配置表单提交事件
     const configForm = document.getElementById('configForm');
@@ -27,9 +99,61 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // 绑定刷新日志按钮事件
-    const refreshLogBtn = document.getElementById('refresh-log-btn');
-    if (refreshLogBtn) {
-        refreshLogBtn.addEventListener('click', refreshLog);
+    // const refreshLogBtn = document.getElementById('refresh-log-btn');
+    // if (refreshLogBtn) {
+    //     refreshLogBtn.addEventListener('click', refreshLog);
+    // }
+    
+    // 新版功能初始化
+    loadNewTasks();
+
+    // 为新任务表单绑定提交事件
+    const createNewTaskForm = document.getElementById('createNewTaskForm');
+    if (createNewTaskForm) {
+        createNewTaskForm.addEventListener('submit', createNewTask);
+    }
+
+    // 为编辑任务表单绑定提交事件
+    const editTaskForm = document.getElementById('editTaskForm');
+    if (editTaskForm) {
+        editTaskForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const form = e.target;
+            const taskId = form.task_id.value;
+            const taskData = {
+                task_id: taskId,
+                task_name: form.task_name.value,
+                task_schedule: form.task_schedule.value,
+                task_exec: form.task_exec.value,
+                task_desc: form.task_desc.value,
+                task_enabled: form.task_enabled.value === 'true',
+                task_timeout: parseInt(form.task_timeout ? form.task_timeout.value : 300),
+                task_retry: parseInt(form.task_retry ? form.task_retry.value : 0),
+                task_retry_interval: parseInt(form.task_retry_interval ? form.task_retry_interval.value : 60),
+                task_log: form.task_log ? form.task_log.value : `logs/task_${taskId}.log`,
+                task_env: {},
+                task_dependencies: [],
+                task_notify: {}
+            };
+            updateTask(taskId, taskData);
+        });
+    }
+
+    // 点击模态窗口外部关闭
+    window.onclick = function(event) {
+        const createTaskModal = document.getElementById('createTaskModal');
+        const editTaskModal = document.getElementById('editTaskModal');
+        const taskDetailsModal = document.getElementById('taskDetailsModal');
+
+        if (event.target == createTaskModal) {
+            closeCreateTaskModal();
+        }
+        if (event.target == editTaskModal) {
+            closeEditModal();
+        }
+        if (event.target == taskDetailsModal) {
+            closeTaskDetailsModal();
+        }
     }
 });
 
@@ -40,6 +164,10 @@ function initTabs() {
     
     tabs.forEach(tab => {
         tab.addEventListener('click', function() {
+            // 清除所有定时器
+            if (logRefreshInterval) clearInterval(logRefreshInterval);
+            if (newLogRefreshInterval) clearInterval(newLogRefreshInterval);
+
             // 移除所有标签页的active类
             tabs.forEach(t => t.classList.remove('active'));
             
@@ -52,6 +180,9 @@ function initTabs() {
             // 显示对应的内容区域
             const target = this.getAttribute('data-target');
             document.getElementById(target).classList.add('active');
+
+            // 触发自定义事件，通知标签页已切换
+            document.dispatchEvent(new CustomEvent('tabChanged', { detail: { target: target } }));
         });
     });
 }
@@ -59,12 +190,9 @@ function initTabs() {
 // 加载任务列表
 function loadTasks() {
     showLoading('taskList');
-    
-    fetch('/api/tasks')
-        .then(response => response.json())
+    fetchApi('/api/tasks', {}, 'loadTasks')
         .then(data => {
             hideLoading('taskList');
-            
             if (data.success) {
                 renderTaskList(data.tasks);
             } else {
@@ -73,7 +201,7 @@ function loadTasks() {
         })
         .catch(error => {
             hideLoading('taskList');
-            showError('taskList', error.message || '加载任务列表失败');
+            showError('taskList', '加载任务列表失败');
         });
 }
 
@@ -112,9 +240,9 @@ function renderTaskList(tasks) {
                     <span class="task-status ${statusClass}">${statusText}</span>
                     <div class="action-buttons">
                         ${isEnabled && task.status === 'running' 
-                            ? '<button class="btn btn-danger btn-sm stop-task" onclick="event.stopPropagation(); stopTask(\'' + taskId + '\')">停止</button>'
+                            ? `<button class="btn btn-danger btn-sm stop-task" onclick="event.stopPropagation(); stopTask('${taskId}')">停止</button>`
                             : isEnabled 
-                                ? '<button class="btn btn-success btn-sm start-task" onclick="event.stopPropagation(); startTask(\'' + taskId + '\')">启动</button>'
+                                ? `<button class="btn btn-success btn-sm start-task" onclick="event.stopPropagation(); startTask('${taskId}')">启动</button>`
                                 : '<button class="btn btn-secondary btn-sm" disabled>已禁用</button>'
                         }
                     </div>
@@ -281,79 +409,110 @@ function stopTask(taskId) {
         });
 }
 
-// 查看任务日志
+function toggleLogRefresh(isNew, start) {
+    const spinner = document.getElementById(isNew ? 'new-log-refresh-spinner' : 'log-refresh-spinner');
+    const stopBtn = document.getElementById(isNew ? 'stop-new-log-refresh-btn' : 'stop-log-refresh-btn');
+    const startBtn = document.getElementById(isNew ? 'start-new-log-refresh-btn' : 'start-log-refresh-btn');
+    const interval = isNew ? newLogRefreshInterval : logRefreshInterval;
+    
+    if (start) {
+        spinner.style.display = 'inline-block';
+        stopBtn.style.display = 'inline-block';
+        startBtn.style.display = 'none';
+    } else {
+        if (interval) {
+            clearInterval(interval);
+            if (isNew) newLogRefreshInterval = null; else logRefreshInterval = null;
+        }
+        spinner.style.display = 'none';
+        stopBtn.style.display = 'none';
+        startBtn.style.display = 'inline-block';
+    }
+}
+
+function stopLogRefresh() {
+    toggleLogRefresh(false, false);
+}
+
+function startLogRefresh() {
+    if (currentTask) {
+        viewTaskLogs(currentTask);
+    }
+}
+
+function stopNewLogRefresh() {
+    toggleLogRefresh(true, false);
+}
+
+function startNewLogRefresh() {
+    if (currentNewTaskId) {
+        viewNewLogs(currentNewTaskId, document.getElementById('newLogTitle').textContent.replace('任务日志: ', ''));
+    }
+}
+
 function viewTaskLogs(taskId) {
     if (!taskId || taskId === 'null') {
         console.warn('无效的任务ID:', taskId);
         return;
     }
     
-    if (currentTask === taskId) {
-        // 如果点击的是同一个任务，则不重新加载日志
+    // 如果是同一个任务且定时器已在运行，则不操作
+    if (currentTask === taskId && logRefreshInterval) {
         return;
     }
 
     currentTask = taskId;
+    document.getElementById('logTitle').textContent = `任务日志 - ${taskId}`;
     
-    // 更新日志标题
-    const logTitle = document.getElementById('logTitle');
-    if (logTitle) {
-        logTitle.textContent = `任务日志 - ${taskId}`;
-    }
-    
-    // 加载任务日志
-    loadTaskLogs(taskId);
-    
-    // 设置定时刷新日志 - 每2秒自动刷新一次，实现类似tail -f的效果
+    // 停止旧的定时器
     if (logRefreshInterval) {
         clearInterval(logRefreshInterval);
+        logRefreshInterval = null;
     }
-    
-    logRefreshInterval = setInterval(() => {
-        if (currentTask === taskId) {
-            loadTaskLogs(taskId, false);
-        }
-    }, 500);
-}
 
-// 刷新日志
-function refreshLog() {
-    if (currentTask) {
-        loadTaskLogs(currentTask, true);
+    // 立即加载一次日志
+    loadTaskLogs(taskId, true);
+    
+    // 只有在服务器连接正常时才启动定时器
+    if (serverConnected) {
+        // 启动新的定时器
+        logRefreshInterval = setInterval(() => {
+            if (currentTask === taskId) {
+                loadTaskLogs(taskId, false);
+            }
+        }, 2000);
+        toggleLogRefresh(false, true);
+    } else {
+        // 服务器已断开连接，不启动定时器，确保旋转动画不显示
+        toggleLogRefresh(false, false);
     }
 }
 
 // 加载任务日志
-function loadTaskLogs(taskId, showLoadingIndicator = true) {
+async function loadTaskLogs(taskId, showLoadingIndicator = true) {
     if (!taskId || taskId === 'null') {
         console.warn('无效的任务ID:', taskId);
         return;
     }
     
+    const logViewerElement = document.getElementById('logViewer');
     if (showLoadingIndicator) {
-        showLoading('logViewer');
+        logViewerElement.innerHTML = '<div class="text-center"><div class="spinner"></div><p>加载中...</p></div>';
     }
     
-    fetch(`/api/tasks/${taskId}/logs?limit=100`)
-        .then(response => response.json())
-        .then(data => {
-            if (showLoadingIndicator) {
-                hideLoading('logViewer');
-            }
-            
-            if (data.success) {
-                console.log("Logs received:", data.logs); // Debug log
-                renderLogs(data.logs);
-            } else {
-                showError('logViewer', data.message || '加载日志失败');
-            }
-        })
-        .catch(error => {
-            if (showLoadingIndicator) {
-                hideLoading('logViewer');
-            }
-            showError('logViewer', error.message || '加载日志失败');
-        });
+    try {
+        const data = await fetchApi(`/api/tasks/${taskId}/logs?limit=100`, {}, `loadTaskLogs for ${taskId}`);
+        if (showLoadingIndicator) {
+            hideLoading('logViewer');
+        }
+        renderLogs(data.logs);
+    } catch (error) {
+        if (showLoadingIndicator) {
+            hideLoading('logViewer');
+        }
+        logViewerElement.innerHTML = '<div class="log-placeholder"><p>加载日志失败</p></div>';
+        toggleLogRefresh(false, false); // 停止刷新动画和按钮
+    }
 }
 
 // 渲染日志
@@ -369,11 +528,13 @@ function renderLogs(logs) {
     
     logs.forEach(log => {
         if (log.raw) {
-            html += `${escapeHtml(log.raw)}\n`;
+            html += `${escapeHtml(log.raw)}
+`;
         } else {
             // 格式化时间戳
             const timestamp = formatTimestamp(log.timestamp);
-            html += `${timestamp} ${log.level} ${escapeHtml(log.message)}\n`;
+            html += `${timestamp} ${log.level} ${escapeHtml(log.message)}
+`;
         }
     });
     
@@ -386,8 +547,43 @@ function renderLogs(logs) {
 
 // 格式化时间戳
 function formatTimestamp(timestamp) {
+    // 如果时间戳为空或无效，返回空字符串
+    if (!timestamp || timestamp.trim() === '') {
+        return '';
+    }
+    
     try {
-        const date = new Date(timestamp);
+        // 处理带毫秒的时间戳格式 (2023-10-27 10:30:00,123)
+        let dateStr = timestamp;
+        if (timestamp.includes(',')) {
+            // 将逗号替换为点，使其符合 JavaScript Date 构造函数的格式
+            dateStr = timestamp.replace(',', '.');
+        }
+        
+        const date = new Date(dateStr);
+        
+        // 检查日期是否有效
+        if (isNaN(date.getTime())) {
+            // 如果无法解析，尝试手动解析格式 YYYY-MM-DD HH:mm:ss
+            const match = timestamp.match(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})/);
+            if (match) {
+                const [, datePart, timePart] = match;
+                const parsedDate = new Date(`${datePart}T${timePart}`);
+                if (!isNaN(parsedDate.getTime())) {
+                    return parsedDate.toLocaleString('zh-CN', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit'
+                    });
+                }
+            }
+            // 如果仍然无法解析，返回原始时间戳
+            return timestamp;
+        }
+        
         return date.toLocaleString('zh-CN', {
             year: 'numeric',
             month: '2-digit',
@@ -397,6 +593,7 @@ function formatTimestamp(timestamp) {
             second: '2-digit'
         });
     } catch (e) {
+        // 出错时返回原始时间戳
         return timestamp;
     }
 }
@@ -410,6 +607,7 @@ function escapeHtml(text) {
 
 // 刷新任务状态
 function refreshTaskStatus() {
+    if (!serverConnected) return;
     const taskItems = document.querySelectorAll('.task-item');
     
     // 如果正在进行任务操作，暂时不刷新状态
@@ -425,15 +623,14 @@ function refreshTaskStatus() {
             return;
         }
         
-        fetch(`/api/tasks/${taskId}/status`)
-            .then(response => response.json())
+        fetchApi(`/api/tasks/${taskId}/status`, {}, `refreshTaskStatus for ${taskId}`)
             .then(data => {
                 if (data.success) {
                     updateTaskStatus(taskItem, data.status, data.enabled);
                 }
             })
             .catch(error => {
-                console.error('刷新任务状态失败:', error);
+                // 错误已由 fetchApi 处理
             });
     });
 }
@@ -496,12 +693,9 @@ function updateTaskStatus(taskItem, status, enabled) {
 // 加载配置
 function loadConfig() {
     showLoading('configForm');
-    
-    fetch('/api/config')
-        .then(response => response.json())
+    fetchApi('/api/config', {}, 'loadConfig')
         .then(data => {
             hideLoading('configForm');
-            
             if (data.success) {
                 renderConfig(data.config);
             } else {
@@ -510,7 +704,7 @@ function loadConfig() {
         })
         .catch(error => {
             hideLoading('configForm');
-            showError('configForm', error.message || '加载配置失败');
+            showError('configForm', '加载配置失败');
         });
 }
 
@@ -535,14 +729,13 @@ function saveConfig() {
         config[key] = value;
     }
     
-    fetch('/api/config', {
+    fetchApi('/api/config', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify(config)
-    })
-        .then(response => response.json())
+    }, 'saveConfig')
         .then(data => {
             hideLoading('configForm');
             
@@ -555,7 +748,7 @@ function saveConfig() {
         })
         .catch(error => {
             hideLoading('configForm');
-            showError('configForm', error.message || '保存配置失败');
+            showError('configForm', '保存配置失败');
         });
 }
 
@@ -616,10 +809,9 @@ function clearLogs() {
     logViewerElement.innerHTML = '<div class="text-center"><div class="spinner"></div><p>正在清空日志...</p></div>';
     
     // 调用API清空日志文件
-    fetch(`/api/tasks/${currentTask}/logs/clear`, {
+    fetchApi(`/api/tasks/${currentTask}/logs/clear`, {
         method: 'POST'
-    })
-        .then(response => response.json())
+    }, `clearLogs for ${currentTask}`)
         .then(data => {
             if (data.success) {
                 showMessage('日志已清空', 'success');
@@ -641,7 +833,7 @@ function clearLogs() {
             }
         })
         .catch(error => {
-            showMessage(error.message || '清空日志失败', 'danger');
+            showMessage('清空日志失败', 'danger');
             loadTaskLogs(currentTask); // 重新加载日志
         });
 }
@@ -664,14 +856,13 @@ function toggleTask(taskId, enabled) {
     
     const actionText = enabled ? '启用' : '禁用';
     
-    fetch(`/api/tasks/${taskId}/toggle`, {
+    fetchApi(`/api/tasks/${taskId}/toggle`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({ enabled: enabled })
-    })
-        .then(response => response.json())
+    }, `toggleTask for ${taskId}`)
         .then(data => {
             if (data.success) {
                 showMessage(data.message || `任务已${actionText}`, 'success');
@@ -682,7 +873,7 @@ function toggleTask(taskId, enabled) {
             taskOperationInProgress = false;
         })
         .catch(error => {
-            showMessage(error.message || `${actionText}任务失败`, 'danger');
+            showMessage(`${actionText}任务失败`, 'danger');
             taskOperationInProgress = false;
         });
 }
@@ -692,8 +883,626 @@ window.addEventListener('beforeunload', function() {
     if (logRefreshInterval) {
         clearInterval(logRefreshInterval);
     }
-    
+    if (newLogRefreshInterval) {
+        clearInterval(newLogRefreshInterval);
+    }
     if (statusRefreshInterval) {
         clearInterval(statusRefreshInterval);
+    }
+});
+
+// 新版任务调度器API配置和变量
+const NEW_API_BASE_URL = '';
+let currentNewTaskId = null;
+let newLogRefreshInterval = null;
+
+
+// 新版任务调度器功能
+function showNewMessage(message, type = 'info') {
+    const container = document.getElementById('new-message-container');
+    const div = document.createElement('div');
+    div.className = `message message-${type}`;
+    div.textContent = message;
+    container.appendChild(div);
+    
+    setTimeout(() => {
+        div.remove();
+    }, 5000);
+}
+
+// 显示创建任务模态窗口
+function showCreateTaskModal() {
+    document.getElementById('createTaskModal').style.display = 'block';
+}
+
+// 关闭创建任务模态窗口
+function closeCreateTaskModal() {
+    document.getElementById('createTaskModal').style.display = 'none';
+    document.getElementById('createNewTaskForm').reset();
+}
+
+// 加载新版任务列表
+async function loadNewTasks() {
+    const taskList = document.getElementById('newTaskList');
+    taskList.innerHTML = `
+        <div class="text-center">
+            <div class="spinner"></div>
+            <p>加载中...</p>
+        </div>
+    `;
+
+    try {
+        const result = await fetchApi(`${NEW_API_BASE_URL}/api/scheduler/tasks`, {}, 'loadNewTasks');
+        if (result.success) {
+            renderNewTaskList(result.data);
+        } else {
+            taskList.innerHTML = `<div class="text-center text-danger">加载失败: ${result.message}</div>`;
+        }
+    } catch (error) {
+        taskList.innerHTML = `<div class="text-center text-danger">网络错误，无法加载任务列表。</div>`;
+    }
+}
+
+// 渲染新版任务列表
+function renderNewTaskList(tasks) {
+    const taskList = document.getElementById('newTaskList');
+    
+    if (tasks.length === 0) {
+        taskList.innerHTML = '<div class="text-center text-muted">暂无任务</div>';
+        return;
+    }
+
+    const html = tasks.map(task => {
+        const isEnabled = task.task_enabled;
+        const statusClass = isEnabled ? 'task-enabled' : 'task-disabled';
+
+        return `
+        <div class="new-task-item ${statusClass}">
+            <div class="task-info-container" onclick="viewNewLogs('${task.task_id}', '${task.task_name}')">
+                <div class="task-primary-info">
+                    <div class="task-name" title="${task.task_name}">${task.task_name}</div>
+                    <div class="task-schedule-cron">${task.task_schedule}</div>
+                </div>
+                <div class="task-description-small" title="${task.task_desc || '无描述'}">${task.task_desc || '无描述'}</div>
+                <div class="task-next-run">
+                    <strong>下次执行:</strong> ${task.next_run_time ? new Date(task.next_run_time).toLocaleString() : 'N/A'}
+                </div>
+            </div>
+            <div class="task-actions-panel" onclick="event.stopPropagation();">
+                <button class="btn btn-sm btn-success" onclick="executeNewTask('${task.task_id}')">运行一次</button>
+                ${isEnabled
+                    ? `<button class="btn btn-sm btn-warning" onclick="toggleNewTask('${task.task_id}', false)">禁用</button>`
+                    : `<button class="btn btn-sm btn-success" onclick="toggleNewTask('${task.task_id}', true)">启用</button>`
+                }
+                <button class="btn btn-sm btn-secondary" onclick="showTaskDetails('${task.task_id}')">详情</button>
+                <button class="btn btn-sm btn-warning" onclick="openEditModal('${task.task_id}')">编辑</button>
+                <button class="btn btn-sm btn-danger" onclick="deleteNewTask('${task.task_id}')">删除</button>
+            </div>
+        </div>
+    `}).join('');
+
+    taskList.innerHTML = html;
+}
+
+async function createNewTask(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const task = {
+        task_id: formData.get('task_id'),
+        task_name: formData.get('task_name'),
+        task_desc: formData.get('task_desc') || '',
+        task_exec: formData.get('task_exec'),
+        task_schedule: formData.get('task_schedule'),
+        task_timeout: parseInt(formData.get('task_timeout')) || 300,
+        task_retry: parseInt(formData.get('task_retry')) || 0,
+        task_retry_interval: 60,
+        task_enabled: formData.get('task_enabled') === 'true',
+        task_log: formData.get('task_log') || `logs/task_${formData.get('task_id')}.log`,
+        task_env: {},
+        task_dependencies: [],
+        task_notify: {}
+    };
+
+    try {
+        const result = await fetchApi(`${NEW_API_BASE_URL}/api/scheduler/tasks`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(task)
+        }, 'createNewTask');
+        
+        if (result.success) {
+            showNewMessage('任务创建成功', 'success');
+            loadNewTasks();
+            closeCreateTaskModal();
+        } else {
+            showNewMessage(`创建失败: ${result.message}`, 'error');
+        }
+    } catch (error) {
+        showNewMessage(`创建失败: 网络错误`, 'error');
+    }
+}
+
+async function updateTask(taskId, taskData) {
+    const errorMessageDiv = document.getElementById('editTaskErrorMessage');
+    errorMessageDiv.textContent = ''; // Clear previous errors
+
+    try {
+        const result = await fetchApi(`${NEW_API_BASE_URL}/api/scheduler/tasks/${taskId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(taskData)
+        }, `updateTask for ${taskId}`);
+
+        if (result.success) {
+            showNewMessage('任务更新成功!', 'success');
+            closeEditModal();
+            loadNewTasks(); // Refresh the task list
+        } else {
+            errorMessageDiv.textContent = `更新失败: ${result.message}`;
+            showNewMessage(`更新失败: ${result.message}`, 'error');
+        }
+    } catch (error) {
+        errorMessageDiv.textContent = `网络错误`;
+        showNewMessage(`更新失败: 网络错误`, 'error');
+    }
+}
+
+// 创建新版任务
+document.getElementById('createNewTaskForm').addEventListener('submit', createNewTask);
+
+document.getElementById('editTaskForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const form = e.target;
+    const taskId = form.task_id.value;
+    const taskData = {
+        task_id: taskId,
+        task_name: form.task_name.value,
+        task_schedule: form.task_schedule.value,
+        task_exec: form.task_exec.value,
+        task_desc: form.task_desc.value,
+        task_enabled: form.task_enabled.value === 'true',
+        // 确保只发送后端期望的字段，过滤掉如 next_run_time 等只读字段
+        task_timeout: parseInt(form.task_timeout ? form.task_timeout.value : 300), // 从表单获取或使用默认值
+        task_retry: parseInt(form.task_retry ? form.task_retry.value : 0), // 从表单获取或使用默认值
+        task_retry_interval: parseInt(form.task_retry_interval ? form.task_retry_interval.value : 60), // 从表单获取或使用默认值
+        task_log: form.task_log ? form.task_log.value : `logs/task_${taskId}.log`, // 从表单获取或使用默认值
+        task_env: {}, // 假设前端不编辑环境变量
+        task_dependencies: [], // 假设前端不编辑依赖
+        task_notify: {} // 假设前端不编辑通知
+    };
+    updateTask(taskId, taskData);
+});
+
+// 执行新版任务
+async function executeNewTask(taskId) {
+    try {
+        const result = await fetchApi(`${NEW_API_BASE_URL}/api/scheduler/tasks/${taskId}/run-once`, {
+            method: 'POST'
+        }, `executeNewTask for ${taskId}`);
+        
+        if (result.success) {
+            showNewMessage(`任务 ${taskId} 开始执行`, 'success');
+            // 自动查看该任务的日志
+            const taskElement = document.querySelector(`.new-task-item .task-name[title='${taskId}']`);
+            const taskName = taskElement ? taskElement.innerText : taskId;
+            setTimeout(() => {
+                viewNewLogs(taskId, taskName);
+            }, 500); // 延迟500ms等待日志写入
+        } else {
+            showNewMessage(`执行失败: ${result.message}`, 'error');
+        }
+    } catch (error) {
+        showNewMessage(`执行失败: 网络错误`, 'error');
+    }
+}
+
+// 查看新版日志
+async function viewNewLogs(taskId, taskName) {
+    if (!taskId) {
+        console.warn('无效的任务ID:', taskId);
+        return;
+    }
+    
+    // 如果是同一个任务且定时器已在运行，则不操作
+    if (currentNewTaskId === taskId && newLogRefreshInterval) {
+        return;
+    }
+
+    currentNewTaskId = taskId;
+    document.getElementById('newLogTitle').textContent = `任务日志: ${taskName}`;
+    
+    // 停止旧的定时器
+    if (newLogRefreshInterval) {
+        clearInterval(newLogRefreshInterval);
+        newLogRefreshInterval = null;
+    }
+
+    // 立即加载一次日志
+    await loadNewTaskLogs(taskId, true);
+    
+    // 只有在服务器连接正常时才启动定时器
+    if (serverConnected) {
+        // 启动新的定时器
+        newLogRefreshInterval = setInterval(() => {
+            if (currentNewTaskId === taskId) {
+                loadNewTaskLogs(taskId, false);
+            }
+        }, 2000);
+        toggleLogRefresh(true, true);
+    } else {
+        // 服务器已断开连接，不启动定时器，确保旋转动画不显示
+        toggleLogRefresh(true, false);
+    }
+}
+
+// 渲染新版日志
+function renderNewLogs(logs) {
+    const logViewer = document.getElementById('newLogViewer');
+    
+    if (!logs || logs.length === 0) {
+        logViewer.innerHTML = '<div class="log-placeholder">暂无日志</div>';
+        return;
+    }
+
+    const html = logs.map(log => `
+        <div class="log-line ${log.content.includes('ERROR') ? 'error' : log.content.includes('WARNING') ? 'warning' : ''}">
+            <span class="log-line-number">${log.line}</span>
+            <span class="log-line-content">${escapeHtml(log.content)}</span>
+        </div>
+    `).join('');
+
+    logViewer.innerHTML = html;
+    logViewer.scrollTop = logViewer.scrollHeight;
+}
+
+// 加载新版任务日志
+async function loadNewTaskLogs(taskId, showLoadingIndicator = true) {
+    if (!taskId) {
+        console.warn('无效的任务ID:', taskId);
+        return;
+    }
+    
+    const logViewer = document.getElementById('newLogViewer');
+    if (showLoadingIndicator) {
+        logViewer.innerHTML = '<div class="text-center"><div class="spinner"></div><p>加载中...</p></div>';
+    }
+    
+    try {
+        const result = await fetchApi(`${NEW_API_BASE_URL}/api/scheduler/tasks/${taskId}/logs`, {}, `loadNewTaskLogs for ${taskId}`);
+        if (showLoadingIndicator) hideLoading('newLogViewer');
+        renderNewLogs(result.data);
+    } catch (error) {
+        if (showLoadingIndicator) hideLoading('newLogViewer');
+        logViewer.innerHTML = '<div class="log-placeholder"><p>加载日志失败</p></div>';
+        // 停止日志刷新和旋转动画
+        toggleLogRefresh(true, false);
+    }
+}
+
+function refreshNewLog() {
+    if (currentNewTaskId) {
+        loadNewTaskLogs(currentNewTaskId, true);
+        showNewMessage('日志已刷新', 'info');
+    } else {
+        showNewMessage('请先选择一个任务', 'warning');
+    }
+}
+
+// 清空新版任务日志
+async function clearNewLog() {
+    if (!currentNewTaskId) {
+        showNewMessage('请先选择一个任务', 'warning');
+        return;
+    }
+    
+    if (!confirm(`确定要清空任务 ${currentNewTaskId} 的日志吗？`)) {
+        return;
+    }
+    
+    // 显示加载中
+    document.getElementById('newLogViewer').innerHTML = '<div class="text-center"><div class="spinner"></div><p>正在清空日志...</p></div>';
+    
+    try {
+        const result = await fetchApi(`${NEW_API_BASE_URL}/api/scheduler/tasks/${currentNewTaskId}/logs/clear`, {
+            method: 'POST'
+        }, `clearNewLog for ${currentNewTaskId}`);
+        
+        if (result.success) {
+            showNewMessage('日志已清空', 'success');
+            document.getElementById('newLogViewer').innerHTML = '<div class="log-placeholder"><p>日志已清空，等待新日志...</p></div>';
+            
+            // 重新启动日志刷新
+            if (newLogRefreshInterval) {
+                clearInterval(newLogRefreshInterval);
+            }
+            
+            newLogRefreshInterval = setInterval(() => {
+                if (currentNewTaskId) {
+                    loadNewTaskLogs(currentNewTaskId, false);
+                }
+            }, 2000);
+        } else {
+            showNewMessage(`清空日志失败: ${result.message}`, 'error');
+            loadNewTaskLogs(currentNewTaskId); // 重新加载日志
+        }
+    } catch (error) {
+        showNewMessage(`清空日志失败: 网络错误`, 'error');
+        loadNewTaskLogs(currentNewTaskId); // 重新加载日志
+    }
+}
+
+// 删除新版任务
+async function deleteNewTask(taskId) {
+    if (!confirm(`确定要删除任务 ${taskId} 吗？`)) {
+        return;
+    }
+
+    try {
+        const result = await fetchApi(`${NEW_API_BASE_URL}/api/scheduler/tasks/${taskId}`, {
+            method: 'DELETE'
+        }, `deleteNewTask for ${taskId}`);
+        
+        if (result.success) {
+            showNewMessage('任务删除成功', 'success');
+            loadNewTasks();
+            if (currentNewTaskId === taskId) {
+                // 清理定时器
+                if (newLogRefreshInterval) {
+                    clearInterval(newLogRefreshInterval);
+                    newLogRefreshInterval = null;
+                }
+                document.getElementById('newLogViewer').innerHTML = '<div class="log-placeholder">请选择一个任务查看日志</div>';
+                currentNewTaskId = null;
+            }
+        } else {
+            showNewMessage(`删除失败: ${result.message}`, 'error');
+        }
+    } catch (error) {
+        showNewMessage(`删除失败: 网络错误`, 'error');
+    }
+}
+
+// 启用/禁用新版任务
+async function toggleNewTask(taskId, enabled) {
+    if (!confirm(`确定要${enabled ? '启用' : '禁用'}任务 ${taskId} 吗？`)) {
+        return;
+    }
+
+    try {
+        const result = await fetchApi(`${NEW_API_BASE_URL}/api/scheduler/tasks/${taskId}/toggle`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ enabled: enabled })
+        }, `toggleNewTask for ${taskId}`);
+        
+        if (result.success) {
+            showNewMessage(`任务 ${taskId} 已${enabled ? '启用' : '禁用'}`, 'success');
+            loadNewTasks(); // 重新加载任务列表
+        } else {
+            showNewMessage(`操作失败: ${result.message}`, 'error');
+        }
+    } catch (error) {
+        showNewMessage(`操作失败: 网络错误`, 'error');
+    }
+}
+
+// 验证CRON表达式
+async function validateCron() {
+    const expression = document.getElementById('cronExpression').value.trim();
+    const resultDiv = document.getElementById('cronResult');
+    
+    if (!expression) {
+        resultDiv.innerHTML = '<span class="text-danger">请输入CRON表达式</span>';
+        return;
+    }
+
+    try {
+        const result = await fetchApi(`${NEW_API_BASE_URL}/api/scheduler/validate-cron`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ cron: expression })
+        }, 'validateCron');
+        
+        if (result.data.valid) {
+            const nextRun = new Date(result.data.next_run);
+            resultDiv.innerHTML = `
+                <span class="text-success">✅ 有效</span><br>
+                <small>下次执行时间: ${nextRun.toLocaleString()}</small>
+            `;
+        } else {
+            resultDiv.innerHTML = `
+                <span class="text-danger">❌ 无效</span><br>
+                <small>${result.data.error}</small>
+            `;
+        }
+    } catch (error) {
+        resultDiv.innerHTML = `<span class="text-danger">验证失败: 网络错误</span>`;
+    }
+}
+
+// 显示任务详情
+async function showTaskDetails(taskId) {
+    try {
+        const result = await fetchApi(`${NEW_API_BASE_URL}/api/scheduler/tasks/${taskId}`, {}, `showTaskDetails for ${taskId}`);
+        
+        if (result.success) {
+            const task = result.data;
+            const content = document.getElementById('taskDetailsContent');
+            
+            content.innerHTML = `
+                <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+                    <div style="margin-bottom: 15px;">
+                        <strong style="color: #333;">任务名称:</strong>
+                        <div style="margin-top: 5px; padding: 8px; background: #f8f9fa; border-radius: 3px;">${task.task_name}</div>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <strong style="color: #333;">任务ID:</strong>
+                        <div style="margin-top: 5px; padding: 8px; background: #f8f9fa; border-radius: 3px; font-family: monospace;">${task.task_id}</div>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <strong style="color: #333;">任务描述:</strong>
+                        <div style="margin-top: 5px; padding: 8px; background: #f8f9fa; border-radius: 3px;">${task.task_desc || '无描述'}</div>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <strong style="color: #333;">执行命令:</strong>
+                        <div style="margin-top: 5px; padding: 8px; background: #f8f9fa; border-radius: 3px; font-family: monospace; font-size: 13px;">${task.task_exec}</div>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <strong style="color: #333;">调度表达式:</strong>
+                        <div style="margin-top: 5px; padding: 8px; background: #f8f9fa; border-radius: 3px; font-family: monospace;">${task.task_schedule}</div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                        <div>
+                            <strong style="color: #333;">超时时间:</strong>
+                            <div style="margin-top: 5px; padding: 8px; background: #f8f9fa; border-radius: 3px;">${task.task_timeout} 秒</div>
+                        </div>
+                        <div>
+                            <strong style="color: #333;">重试次数:</strong>
+                            <div style="margin-top: 5px; padding: 8px; background: #f8f9fa; border-radius: 3px;">${task.task_retry} 次</div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <strong style="color: #333;">日志文件:</strong>
+                        <div style="margin-top: 5px; padding: 8px; background: #f8f9fa; border-radius: 3px; font-family: monospace;">${task.task_log}</div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                        <div>
+                            <strong style="color: #333;">启用状态:</strong>
+                            <div style="margin-top: 5px; padding: 8px; background: #f8f9fa; border-radius: 3px;">
+                                <span style="color: ${task.task_enabled ? '#28a745' : '#dc3545'};">
+                                    ${task.task_enabled ? '启用' : '禁用'}
+                                </span>
+                            </div>
+                        </div>
+                        <div>
+                            <strong style="color: #333;">下次执行:</strong>
+                            <div style="margin-top: 5px; padding: 8px; background: #f8f9fa; border-radius: 3px;">
+                                ${task.next_run_time ? new Date(task.next_run_time).toLocaleString() : '未安排'}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="margin-bottom: 15px;">
+                        <strong style="color: #333;">创建时间:</strong>
+                        <div style="margin-top: 5px; padding: 8px; background: #f8f9fa; border-radius: 3px;">${new Date(task.created_at).toLocaleString()}</div>
+                    </div>
+                    
+                    ${task.last_run_time ? `
+                    <div style="margin-bottom: 15px;">
+                        <strong style="color: #333;">上次执行:</strong>
+                        <div style="margin-top: 5px; padding: 8px; background: #f8f9fa; border-radius: 3px;">${new Date(task.last_run_time).toLocaleString()}</div>
+                    </div>
+                    ` : ''}
+                </div>
+            `;
+            
+            document.getElementById('taskDetailsModal').style.display = 'block';
+        } else {
+            showNewMessage(`获取任务详情失败: ${result.message}`, 'error');
+        }
+    } catch (error) {
+        showNewMessage(`获取任务详情失败: 网络错误`, 'error');
+    }
+}
+
+// 关闭任务详情模态窗口
+function closeTaskDetailsModal() {
+    document.getElementById('taskDetailsModal').style.display = 'none';
+}
+
+// --- Edit Task Functions ---
+async function openEditModal(taskId) {
+    const modal = document.getElementById('editTaskModal');
+    const form = document.getElementById('editTaskForm');
+    try {
+        const response = await fetch(`${NEW_API_BASE_URL}/api/scheduler/tasks/${taskId}`);
+        const result = await response.json();
+        if (!result.success) {
+            showNewMessage(`错误: ${result.message}`, 'error');
+            return;
+        }
+        const task = result.data;
+        // Populate the form
+        form.task_id.value = task.task_id;
+        form.task_name.value = task.task_name;
+        form.task_schedule.value = task.task_schedule;
+        form.task_exec.value = task.task_exec;
+        form.task_desc.value = task.task_desc;
+        form.task_enabled.value = task.task_enabled.toString();
+        
+        document.getElementById('editModalTitle').innerText = `编辑任务: ${task.task_name}`;
+        modal.style.display = 'block';
+    } catch (error) {
+        showNewMessage(`网络错误: ${error.message}`, 'error');
+    }
+}
+
+function closeEditModal() {
+    document.getElementById('editTaskModal').style.display = 'none';
+}
+
+document.getElementById('editTaskForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const form = e.target;
+    const taskId = form.task_id.value;
+    const taskData = {
+        task_id: taskId,
+        task_name: form.task_name.value,
+        task_schedule: form.task_schedule.value,
+        task_exec: form.task_exec.value,
+        task_desc: form.task_desc.value,
+        task_enabled: form.task_enabled.value === 'true',
+        // 确保只发送后端期望的字段，过滤掉如 next_run_time 等只读字段
+        task_timeout: parseInt(form.task_timeout ? form.task_timeout.value : 300), // 从表单获取或使用默认值
+        task_retry: parseInt(form.task_retry ? form.task_retry.value : 0), // 从表单获取或使用默认值
+        task_retry_interval: parseInt(form.task_retry_interval ? form.task_retry_interval.value : 60), // 从表单获取或使用默认值
+        task_log: form.task_log ? form.task_log.value : `logs/task_${taskId}.log`, // 从表单获取或使用默认值
+        task_env: {}, // 假设前端不编辑环境变量
+        task_dependencies: [], // 假设前端不编辑依赖
+        task_notify: {} // 假设前端不编辑通知
+    };
+
+    const errorMessageDiv = document.getElementById('editTaskErrorMessage');
+    errorMessageDiv.textContent = ''; // Clear previous errors
+
+    try {
+        const response = await fetch(`${NEW_API_BASE_URL}/api/scheduler/tasks/${taskId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(taskData)
+        });
+        const result = await response.json();
+        if (result.success) {
+            showNewMessage('任务更新成功!', 'success');
+            closeEditModal();
+            loadNewTasks(); // Refresh the task list
+        } else {
+            errorMessageDiv.textContent = `更新失败: ${result.message}`;
+            showNewMessage(`更新失败: ${result.message}`, 'error');
+        }
+    } catch (error) {
+        errorMessageDiv.textContent = `网络错误: ${error.message}`;
+        showNewMessage(`网络错误: ${error.message}`, 'error');
+    }
+});
+
+// 标签页切换时初始化对应内容
+document.addEventListener('tabChanged', function(e) {
+    if (e.detail.target === 'new-scheduler') {
+        loadNewTasks();
     }
 });

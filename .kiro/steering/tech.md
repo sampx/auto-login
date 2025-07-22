@@ -1,3 +1,7 @@
+---
+inclusion: always
+---
+
 # Technology Stack
 
 ## Core Technologies
@@ -5,7 +9,7 @@
 - **Python 3.9**: Main programming language
 - **Playwright**: Browser automation framework with Chromium
 - **APScheduler**: Task scheduling library for cron-like functionality
-- **Flask**: Web framework for optional configuration interface
+- **Flask**: Web framework for unified web interface
 - **Docker**: Containerization platform
 
 ## Key Dependencies
@@ -26,14 +30,14 @@ psutil==5.9.5             # Process monitoring
 # Build the Docker image
 ./build.sh
 
-# Run production container
+# Run scheduled login service
 ./start.sh
+
+# Run unified web interface (port 5001)
+./start_web_app.sh
 
 # Run tests
 ./test.sh
-
-# Start with web interface
-./start_web_app.sh
 ```
 
 ### Development Commands
@@ -45,12 +49,38 @@ pip install -r requirements.txt
 playwright install chromium
 playwright install-deps
 
-# Run directly
-python auto_login.py
+# Run services
+python auto_login.py         # CLI scheduled service
+python app.py                # Unified Web UI (http://localhost:5001)
+python scheduler_engine.py   # Generic task scheduler (standalone testing)
 
-# Run web interface
-python web_interface.py
+# Test components
+python test_login.py         # Test browser automation
+python test_email_notifier.py # Test email notifications
+python test_scheduler.py     # Test generic task scheduler
+python -m pytest test_*.py   # Run all tests
 ```
+
+## API Endpoints
+
+### Legacy API (DO NOT MODIFY)
+- `GET /api/tasks` - List all tasks
+- `GET /api/tasks/<id>` - Get task details
+- `POST /api/tasks/<id>/start` - Start task
+- `POST /api/tasks/<id>/stop` - Stop task
+- `GET /api/tasks/<id>/status` - Get task status
+
+### New Scheduler API (USE FOR NEW FEATURES)
+- `GET /api/scheduler/tasks` - List scheduler tasks
+- `POST /api/scheduler/tasks` - Create new task
+- `GET /api/scheduler/tasks/<id>` - Get task details
+- `PUT /api/scheduler/tasks/<id>` - Update task
+- `DELETE /api/scheduler/tasks/<id>` - Delete task
+
+### Configuration & Logging
+- `GET /api/config` - Get current config
+- `POST /api/config` - Update configuration
+- `GET /api/logs/<task_id>` - Get task logs
 
 ## Environment Configuration
 

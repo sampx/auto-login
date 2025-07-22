@@ -11,7 +11,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from dotenv import load_dotenv
-from logger_helper import LoggerHelper
+from logger_helper import LoggerHelper, setup_logging
 
 class Task:
     """任务模型类，表示一个自动登录任务"""
@@ -48,7 +48,9 @@ class TaskManager:
     """任务管理器类，负责管理自动登录任务"""
     
     def __init__(self):
-        self.logger = LoggerHelper.get_system_logger(__name__)
+        # Setup logging and get logger
+        setup_logging()
+        self.logger = logging.getLogger(__name__)
         self.tasks: Dict[str, Task] = {}
         self.scheduler = BackgroundScheduler()
         self.scheduler.start()
@@ -328,8 +330,8 @@ class TaskManager:
             task.pid = None
             
             # 写入任务日志，表示任务已结束
-            from logger_helper import LoggerHelper
-            task_logger = LoggerHelper.get_task_logger(task_id)
+            from logger_helper import get_task_logger
+            task_logger = get_task_logger(task_id)
             task_logger.info(f"任务已结束")
             
             # 写入系统日志，记录任务状态变化

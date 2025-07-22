@@ -14,17 +14,10 @@ import logging
 from datetime import datetime
 
 # 配置日志
-def setup_logger(log_file):
+def setup_logger():
     """设置日志记录器"""
     logger = logging.getLogger('test_task')
     logger.setLevel(logging.INFO)
-    
-    # 确保日志目录存在
-    os.makedirs(os.path.dirname(log_file), exist_ok=True)
-    
-    # 文件处理器
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setLevel(logging.INFO)
     
     # 控制台处理器
     console_handler = logging.StreamHandler()
@@ -32,11 +25,9 @@ def setup_logger(log_file):
     
     # 格式化器
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    file_handler.setFormatter(formatter)
     console_handler.setFormatter(formatter)
     
     # 添加处理器
-    logger.addHandler(file_handler)
     logger.addHandler(console_handler)
     
     return logger
@@ -81,12 +72,9 @@ def print_fancy_config(env_vars, logger):
 
 def main():
     """主函数"""
-    # 获取日志文件路径
-    log_file = os.environ.get('TASK_LOG', 'logs/task_test-task.log')
-    os.makedirs(os.path.dirname(log_file), exist_ok=True)
     
     # 设置日志记录器
-    logger = setup_logger(log_file)
+    logger = setup_logger()
     
     # 记录开始时间
     start_time = datetime.now()

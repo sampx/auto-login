@@ -20,9 +20,9 @@ browser_handler = None
 
 class AutoLogin:
     def __init__(self):
-        from logger_helper import LoggerHelper
+        from logger_helper import get_task_logger
         # 使用任务日志记录器 - 只记录到任务日志文件
-        self.logger = LoggerHelper.get_task_logger("auto_login")
+        self.logger = get_task_logger("auto_login")
         self.url = os.getenv('WEBSITE_URL')  # 获取网站URL
         self.username = os.getenv('USERNAME')  # 获取用户名
         self.password = os.getenv('PASSWORD')  # 获取密码
@@ -106,8 +106,8 @@ def validate_env_vars():
 
 def signal_handler(signum, frame):
     """处理终止信号"""
-    from logger_helper import LoggerHelper
-    logger = LoggerHelper.get_task_logger("auto_login")
+    from logger_helper import get_task_logger
+    logger = get_task_logger("auto_login")
     
     signal_name = 'SIGTERM' if signum == signal.SIGTERM else 'SIGINT'
     logger.info(f"收到{signal_name}信号，任务即将终止。")
@@ -118,9 +118,9 @@ def signal_handler(signum, frame):
     sys.exit(0)
 
 def main():
-    from logger_helper import LoggerHelper
+    from logger_helper import get_task_logger
     # 使用任务日志 - 只记录到任务日志文件，不输出到控制台或系统日志
-    logger = LoggerHelper.get_task_logger("auto_login")
+    logger = get_task_logger("auto_login")
     
     # 检查是否已经有进程在运行
     try:

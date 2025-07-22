@@ -1,70 +1,99 @@
+---
+inclusion: always
+---
+
 # Project Structure
 
 ## Root Directory Layout
 
 ```
-├── auto_login.py           # Main application entry point
+├── app.py                  # Unified Flask web server (port 5001)
+├── api_blueprint.py        # NEW VERSION: Scheduler API blueprint
+├── legacy_api_blueprint.py # OLD VERSION: Legacy task API (DO NOT MODIFY)
+├── auto_login.py           # Main scheduled login service
+├── scheduler_engine.py     # NEW VERSION: Generic task scheduling engine
+├── task_manager.py         # OLD VERSION: Legacy task management (DO NOT MODIFY)
 ├── browser_handler.py      # Browser automation logic
 ├── email_notifier.py       # Email notification functionality
 ├── logger_helper.py        # Logging configuration and management
 ├── process_manager.py      # Process management functionality
-├── task_manager.py         # Task management functionality
-├── web_interface.py        # Flask web interface
 ├── requirements.txt        # Python dependencies
 ├── Dockerfile              # Container configuration
 ├── .env.example            # Environment template
 ├── .env                    # Production config (not in git)
 ├── .env.test               # Test configuration
 ├── logs/                   # Application logs
+│   ├── sys.log             # System logs
+│   ├── task_auto_login.log # Task execution logs
+│   └── ...                 # Other task logs
 ├── static/                 # Static resource files
 │   ├── css/                # CSS style files
 │   └── js/                 # JavaScript files
 ├── templates/              # Flask HTML templates
+│   └── index.html          # Dual-tab UI (old + new versions)
+├── tasks/                  # Task scripts directory
 └── .kiro/                  # Kiro configuration
 ```
 
 ## Core Modules
 
-### Main Application (`auto_login.py`)
-- Entry point and orchestration
-- Scheduler configuration and management
+### Unified Web Server (`app.py`)
+- Main Flask application serving both old and new UIs
+- Registers both legacy and new API blueprints
+- Serves static files and templates
+- Port 5001 for all web services
+
+### API Blueprints
+#### New Scheduler API (`api_blueprint.py`) - **USE FOR NEW FEATURES**
+- Blueprint for `/api/scheduler/tasks/*` endpoints
+- Configuration and logging APIs
+- Modern task scheduling functionality
+
+#### Legacy API (`legacy_api_blueprint.py`) - **DO NOT MODIFY**
+- Blueprint for `/api/tasks/*` endpoints
+- Old task management functionality
+- Maintained for backward compatibility only
+
+### Scheduling Services
+#### Main Login Service (`auto_login.py`)
+- Entry point for scheduled login automation
+- APScheduler configuration and management
 - Signal handling for graceful shutdown
 - Environment validation
 
-### Browser Handler (`browser_handler.py`)
+#### Generic Scheduler (`scheduler_engine.py`) - **NEW VERSION**
+- Generic task scheduling engine
+- Cron-based task management
+- Can run standalone for testing
+- Modern scheduling architecture
+
+#### Legacy Task Manager (`task_manager.py`) - **OLD VERSION - DO NOT MODIFY**
+- Legacy process management
+- Old task lifecycle management
+- Maintained for compatibility only
+
+### Core Components
+#### Browser Handler (`browser_handler.py`)
 - Playwright browser management
 - Login automation logic
 - Page interaction and status checking
 - Resource cleanup
 
-### Email Notifier (`email_notifier.py`)
+#### Email Notifier (`email_notifier.py`)
 - SMTP email functionality
 - Success/failure notifications
 - Configurable email templates
 
-### Process Manager (`process_manager.py`)
-- 进程创建和监控
-- 进程状态管理
-- 资源使用统计
-- 进程终止和清理
+#### Process Manager (`process_manager.py`)
+- Process creation and monitoring
+- Process status management
+- Resource usage statistics
+- Process termination and cleanup
 
-### Task Manager (`task_manager.py`)
-- 任务模型和状态管理
-- 任务操作（启动/停止）
-- 任务调度
-- 任务元数据管理
-
-### Web Interface (`web_interface.py`)
-- Flask Web服务器
-- RESTful API接口
-- 任务管理API
-- 配置管理API
-- 日志查看API
-
-### Logger Helper (`logger_helper.py`)
-- 日志配置
-- 日志读取和过滤
-- 日志格式化
+#### Logger Helper (`logger_helper.py`)
+- Logging configuration
+- Log reading and filtering
+- Log formatting
 
 ## Configuration Files
 

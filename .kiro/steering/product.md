@@ -2,57 +2,96 @@
 inclusion: always
 ---
 
-# Product Overview
+# Automated Website Login System
 
-## Automated Website Login System
+A scheduled automation system for maintaining account activity through automated logins with email notifications.
 
-This is a scheduled automation system that performs automatic website logins and sends email notifications about login status. The system is designed to keep accounts active by logging in at specified intervals.
+## Core Architecture
 
-## Key Features
+**Unified Web Server:**
+- **`app.py`** - Main Flask web server serving both old and new task management UIs and APIs (port 5001)
+- **`legacy_api_blueprint.py`** - Blueprint for old task management API (`/api/tasks/*`) - LEGACY, avoid modifications
+- **`api_blueprint.py`** - Blueprint for new scheduler API (`/api/scheduler/tasks/*`) and core APIs
 
-- **Scheduled Login**: Configurable monthly or minute-based scheduling using APScheduler
-- **Browser Automation**: Uses Playwright with Chromium for reliable web automation
-- **Email Notifications**: Sends success/failure notifications via SMTP
-- **Docker Support**: Fully containerized with Docker for easy deployment
-- **Web Task Manager**: Flask-based web interface for task management and configuration
-- **Task Control**: Start, stop, and monitor tasks through the web interface
-- **Log Viewing**: Real-time task execution log viewing
-- **Configuration Management**: Modify system parameters through the web interface
-- **Robust Error Handling**: Retry logic, timeout handling, and graceful cleanup
+**Service Components:**
+- **`auto_login.py`** - Main scheduled login service with APScheduler
+- **`scheduler_engine.py`** - NEW VERSION: Generic task scheduling engine for cron-based tasks
+- **`task_manager.py`** - OLD VERSION: Legacy process management (DO NOT MODIFY)
+- **`browser_handler.py`** - Playwright-based browser automation
+- **`email_notifier.py`** - Email notification system
 
-## Target Use Case
+**Service Layers:**
+- **Web Layer**: Single Flask REST API + Static frontend (port 5001)
+- **Process Layer**: Subprocess management with signal handling
+- **Automation Layer**: Playwright browser automation (headless Chromium)
+- **Scheduling Layer**: APScheduler for cron/interval triggers
+- **Notification Layer**: SMTP email alerts
 
-Primarily designed for keeping hosting accounts (like Serv00) active by performing scheduled logins to prevent account suspension due to inactivity.
+## Code Standards
 
-## Configuration
+### Naming Conventions
+- **Files/Functions/Variables**: `snake_case`
+- **Classes**: `PascalCase`
+- **Constants**: `UPPER_SNAKE_CASE`
+- **Environment Variables**: `UPPER_SNAKE_CASE`
 
-All settings are managed through environment variables in `.env` file, including:
-- Website credentials and URL
-- Email notification settings
-- Schedule configuration
-- Retry parameters
-- Logging levels
+### Required Patterns
+- **Error Handling**: All browser operations must include retry logic and proper cleanup
+- **Logging**: Use `logger_helper` module exclusively for all logging operations
+- **Configuration**: Access all settings via environment variables, never hardcode
+- **Process Management**: Use `process_manager` for any process-related operations
+- **Graceful Shutdown**: Implement signal handlers for clean termination
 
-## Code Conventions
+### Module Responsibilities
+- Each module has single responsibility
+- Dependencies injected rather than created internally
+- Event-driven communication between components
+- Proper resource cleanup in all operations
 
-- **Error Handling**: All browser interactions must include proper error handling with retries
-- **Logging**: Use the logger_helper module for all logging operations
-- **Environment Variables**: All configurable parameters should be accessed via environment variables
-- **Process Management**: Use the process_manager module for any process-related operations
-- **Task Structure**: New tasks should follow the pattern established in existing task modules
+## Version Management
 
-## Architecture Patterns
+**CRITICAL RULE: All new features MUST be implemented in NEW VERSION only**
 
-- **Separation of Concerns**: Each module has a single responsibility
-- **Configuration Externalization**: All settings stored in environment variables
-- **Dependency Injection**: Components receive their dependencies rather than creating them
-- **Event-Driven**: Use signals and events for inter-component communication
-- **Graceful Shutdown**: All components must handle termination signals properly
+- **OLD VERSION**: `task_manager.py` + `legacy_api_blueprint.py` (DO NOT MODIFY)
+- **NEW VERSION**: `scheduler_engine.py` + `api_blueprint.py` (USE FOR ALL NEW FEATURES)
+- **UI**: Both versions accessible via tabs in `templates/index.html`
+- **APIs**: 
+  - Legacy: `/api/tasks/*` 
+  - New: `/api/scheduler/tasks/*`
 
-## AI Assistant Language Requirements
+## Development Guidelines
 
-- Reply to users in Chinese
-- Write code comments and git commit messages in English
-- Follow snake_case naming for functions and variables
-- Follow PascalCase for class names
-- Document all public functions with docstrings
+### Version Selection
+- **Never modify OLD VERSION code** (`task_manager.py`, `legacy_api_blueprint.py`)
+- **Always use NEW VERSION** for feature requests (`scheduler_engine.py`, `api_blueprint.py`)
+- Web interface contains two tabs - do not confuse them when making changes
+
+### Browser Automation
+- Always use Playwright with Chromium
+- Include timeout handling for all page interactions
+- Implement retry mechanisms for network operations
+- Clean up browser resources in finally blocks
+
+### Task Development
+- Follow existing task patterns in `tasks/` directory
+- Include proper status reporting and logging
+- Handle both success and failure scenarios
+- Provide meaningful error messages
+
+### API Development
+- RESTful endpoints for task management
+- JSON responses with consistent error handling
+- Proper HTTP status codes
+- Input validation for all endpoints
+
+### Configuration Management
+- Environment variables in `.env` file (never commit)
+- Required variables: `WEBSITE_URL`, `USERNAME`, `PASSWORD`, email settings
+- Schedule configuration: `LOGIN_SCHEDULE_TYPE`, `LOGIN_SCHEDULE_DATE`, `LOGIN_SCHEDULE_TIME`
+- Retry settings: `MAX_RETRIES` (1-10)
+
+## Language Requirements
+- **User Communication**: Chinese
+- **Code Comments**: English
+- **Git Commits**: English
+- **Documentation**: English (except user-facing content)
