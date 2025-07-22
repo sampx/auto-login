@@ -537,7 +537,8 @@ body {
 }
 
 /* 提示消息 */
-#message-container {
+#message-container,
+#new-message-container {
     margin-top: 20px;
 }
 

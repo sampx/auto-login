@@ -113,31 +113,7 @@ document.addEventListener('DOMContentLoaded', function() {
         createNewTaskForm.addEventListener('submit', createNewTask);
     }
 
-    // 为编辑任务表单绑定提交事件
-    const editTaskForm = document.getElementById('editTaskForm');
-    if (editTaskForm) {
-        editTaskForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const form = e.target;
-            const taskId = form.task_id.value;
-            const taskData = {
-                task_id: taskId,
-                task_name: form.task_name.value,
-                task_schedule: form.task_schedule.value,
-                task_exec: form.task_exec.value,
-                task_desc: form.task_desc.value,
-                task_enabled: form.task_enabled.value === 'true',
-                task_timeout: parseInt(form.task_timeout ? form.task_timeout.value : 300),
-                task_retry: parseInt(form.task_retry ? form.task_retry.value : 0),
-                task_retry_interval: parseInt(form.task_retry_interval ? form.task_retry_interval.value : 60),
-                task_log: form.task_log ? form.task_log.value : `logs/task_${taskId}.log`,
-                task_env: {},
-                task_dependencies: [],
-                task_notify: {}
-            };
-            updateTask(taskId, taskData);
-        });
-    }
+    // 编辑任务表单的提交事件在后面单独处理，这里不需要重复绑定
 
     // 点击模态窗口外部关闭
     window.onclick = function(event) {
@@ -900,13 +876,17 @@ let newLogRefreshInterval = null;
 // 新版任务调度器功能
 function showNewMessage(message, type = 'info') {
     const container = document.getElementById('new-message-container');
-    const div = document.createElement('div');
-    div.className = `message message-${type}`;
-    div.textContent = message;
-    container.appendChild(div);
+    const alertElement = document.createElement('div');
+    alertElement.className = `alert alert-${type}`;
+    alertElement.textContent = message;
     
+    // 清空旧消息，避免显示多条相同的通知
+    container.innerHTML = '';
+    container.appendChild(alertElement);
+    
+    // 5秒后自动移除
     setTimeout(() => {
-        div.remove();
+        alertElement.remove();
     }, 5000);
 }
 
@@ -922,24 +902,31 @@ function closeCreateTaskModal() {
 }
 
 // 加载新版任务列表
-async function loadNewTasks() {
+async function loadNewTasks(showLoading = true) {
     const taskList = document.getElementById('newTaskList');
-    taskList.innerHTML = `
-        <div class="text-center">
-            <div class="spinner"></div>
-            <p>加载中...</p>
-        </div>
-    `;
+    
+    if (showLoading) {
+        taskList.innerHTML = `
+            <div class="text-center">
+                <div class="spinner"></div>
+                <p>加载中...</p>
+            </div>
+        `;
+    }
 
     try {
         const result = await fetchApi(`${NEW_API_BASE_URL}/api/scheduler/tasks`, {}, 'loadNewTasks');
         if (result.success) {
             renderNewTaskList(result.data);
         } else {
-            taskList.innerHTML = `<div class="text-center text-danger">加载失败: ${result.message}</div>`;
+            if (showLoading) {
+                taskList.innerHTML = `<div class="text-center text-danger">加载失败: ${result.message}</div>`;
+            }
         }
     } catch (error) {
-        taskList.innerHTML = `<div class="text-center text-danger">网络错误，无法加载任务列表。</div>`;
+        if (showLoading) {
+            taskList.innerHTML = `<div class="text-center text-danger">网络错误，无法加载任务列表。</div>`;
+        }
     }
 }
 
@@ -1015,13 +1002,26 @@ async function createNewTask(e) {
         
         if (result.success) {
             showNewMessage('任务创建成功', 'success');
-            loadNewTasks();
             closeCreateTaskModal();
+            // 静默刷新任务列表，不显示额外通知
+            await loadNewTasks(false);
         } else {
-            showNewMessage(`创建失败: ${result.message}`, 'error');
+            // 显示错误消息
+            const errorMessageDiv = document.getElementById('createTaskErrorMessage');
+            if (errorMessageDiv) {
+                errorMessageDiv.textContent = `创建失败: ${result.message}`;
+            } else {
+                showNewMessage(`创建失败: ${result.message}`, 'error');
+            }
         }
     } catch (error) {
-        showNewMessage(`创建失败: 网络错误`, 'error');
+        // 显示错误消息
+        const errorMessageDiv = document.getElementById('createTaskErrorMessage');
+        if (errorMessageDiv) {
+            errorMessageDiv.textContent = `创建失败: 网络错误`;
+        } else {
+            showNewMessage(`创建失败: 网络错误`, 'error');
+        }
     }
 }
 
@@ -1037,43 +1037,85 @@ async function updateTask(taskId, taskData) {
         }, `updateTask for ${taskId}`);
 
         if (result.success) {
+            // 只显示一条成功消息
             showNewMessage('任务更新成功!', 'success');
             closeEditModal();
-            loadNewTasks(); // Refresh the task list
+            // 静默刷新任务列表，不显示额外通知
+            await loadNewTasks(false); 
         } else {
+            // 只在模态框内显示错误，不在通知区域重复显示
             errorMessageDiv.textContent = `更新失败: ${result.message}`;
-            showNewMessage(`更新失败: ${result.message}`, 'error');
         }
     } catch (error) {
-        errorMessageDiv.textContent = `网络错误`;
-        showNewMessage(`更新失败: 网络错误`, 'error');
+        // 只在模态框内显示错误，不在通知区域重复显示
+        errorMessageDiv.textContent = `更新失败: 网络错误`;
     }
 }
 
 // 创建新版任务
 document.getElementById('createNewTaskForm').addEventListener('submit', createNewTask);
 
+// 编辑任务表单提交处理
 document.getElementById('editTaskForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     const form = e.target;
     const taskId = form.task_id.value;
-    const taskData = {
-        task_id: taskId,
-        task_name: form.task_name.value,
-        task_schedule: form.task_schedule.value,
-        task_exec: form.task_exec.value,
-        task_desc: form.task_desc.value,
-        task_enabled: form.task_enabled.value === 'true',
-        // 确保只发送后端期望的字段，过滤掉如 next_run_time 等只读字段
-        task_timeout: parseInt(form.task_timeout ? form.task_timeout.value : 300), // 从表单获取或使用默认值
-        task_retry: parseInt(form.task_retry ? form.task_retry.value : 0), // 从表单获取或使用默认值
-        task_retry_interval: parseInt(form.task_retry_interval ? form.task_retry_interval.value : 60), // 从表单获取或使用默认值
-        task_log: form.task_log ? form.task_log.value : `logs/task_${taskId}.log`, // 从表单获取或使用默认值
-        task_env: {}, // 假设前端不编辑环境变量
-        task_dependencies: [], // 假设前端不编辑依赖
-        task_notify: {} // 假设前端不编辑通知
-    };
-    updateTask(taskId, taskData);
+    
+    // 获取原始任务数据，以保留未在表单中显示的字段
+    try {
+        const response = await fetchApi(`${NEW_API_BASE_URL}/api/scheduler/tasks/${taskId}`, {}, `getOriginalTask for ${taskId}`);
+        if (!response.success) {
+            const errorMessageDiv = document.getElementById('editTaskErrorMessage');
+            errorMessageDiv.textContent = `获取原始任务数据失败: ${response.message}`;
+            return;
+        }
+        
+        const originalTask = response.data;
+        
+        // 创建更新数据，只更新表单中的字段，保留其他字段的原始值
+        const taskData = {
+            task_id: taskId,
+            task_name: form.task_name.value,
+            task_schedule: form.task_schedule.value,
+            task_exec: form.task_exec.value,
+            task_desc: form.task_desc.value,
+            task_enabled: form.task_enabled.value === 'true',
+            task_timeout: parseInt(form.task_timeout.value),
+            task_retry: parseInt(form.task_retry.value),
+            task_retry_interval: parseInt(form.task_retry_interval.value),
+            task_log: form.task_log.value,
+            // 保留原始值
+            task_env: originalTask.task_env || {},
+            task_dependencies: originalTask.task_dependencies || [],
+            task_notify: originalTask.task_notify || {}
+        };
+        
+        // 添加唯一请求ID，防止重复提交
+        const requestId = `edit_${taskId}_${Date.now()}`;
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-Request-ID': requestId
+        };
+        
+        // 发送更新请求
+        const result = await fetchApi(`${NEW_API_BASE_URL}/api/scheduler/tasks/${taskId}`, {
+            method: 'PUT',
+            headers: headers,
+            body: JSON.stringify(taskData)
+        }, `updateTask for ${taskId}`);
+        
+        if (result.success) {
+            showNewMessage('任务更新成功!', 'success');
+            closeEditModal();
+            loadNewTasks(false); // 静默刷新任务列表
+        } else {
+            const errorMessageDiv = document.getElementById('editTaskErrorMessage');
+            errorMessageDiv.textContent = `更新失败: ${result.message}`;
+        }
+    } catch (error) {
+        const errorMessageDiv = document.getElementById('editTaskErrorMessage');
+        errorMessageDiv.textContent = `更新失败: ${error.message}`;
+    }
 });
 
 // 执行新版任务
@@ -1119,6 +1161,9 @@ async function viewNewLogs(taskId, taskName) {
         clearInterval(newLogRefreshInterval);
         newLogRefreshInterval = null;
     }
+
+    // 重置当前日志文件路径
+    currentLogFile = null;
 
     // 立即加载一次日志
     await loadNewTaskLogs(taskId, true);
@@ -1173,6 +1218,13 @@ async function loadNewTaskLogs(taskId, showLoadingIndicator = true) {
     try {
         const result = await fetchApi(`${NEW_API_BASE_URL}/api/scheduler/tasks/${taskId}/logs`, {}, `loadNewTaskLogs for ${taskId}`);
         if (showLoadingIndicator) hideLoading('newLogViewer');
+        
+        // 保存当前日志文件路径，用于后续刷新
+        if (result.log_file) {
+            currentLogFile = result.log_file;
+            console.log(`已更新日志文件路径: ${currentLogFile}`);
+        }
+        
         renderNewLogs(result.data);
     } catch (error) {
         if (showLoadingIndicator) hideLoading('newLogViewer');
@@ -1206,6 +1258,14 @@ async function clearNewLog() {
     document.getElementById('newLogViewer').innerHTML = '<div class="text-center"><div class="spinner"></div><p>正在清空日志...</p></div>';
     
     try {
+        // 获取最新的任务信息，确保使用正确的日志文件路径
+        const taskInfo = await fetchApi(`${NEW_API_BASE_URL}/api/scheduler/tasks/${currentNewTaskId}`, {}, `getTaskInfo for ${currentNewTaskId}`);
+        
+        if (!taskInfo.success) {
+            showNewMessage('获取任务信息失败', 'error');
+            return;
+        }
+        
         const result = await fetchApi(`${NEW_API_BASE_URL}/api/scheduler/tasks/${currentNewTaskId}/logs/clear`, {
             method: 'POST'
         }, `clearNewLog for ${currentNewTaskId}`);
@@ -1428,20 +1488,32 @@ function closeTaskDetailsModal() {
 async function openEditModal(taskId) {
     const modal = document.getElementById('editTaskModal');
     const form = document.getElementById('editTaskForm');
+    const errorMessageDiv = document.getElementById('editTaskErrorMessage');
+    errorMessageDiv.textContent = ''; // 清除之前的错误信息
+    
     try {
-        const response = await fetch(`${NEW_API_BASE_URL}/api/scheduler/tasks/${taskId}`);
-        const result = await response.json();
-        if (!result.success) {
-            showNewMessage(`错误: ${result.message}`, 'error');
+        const response = await fetchApi(`${NEW_API_BASE_URL}/api/scheduler/tasks/${taskId}`, {}, `openEditModal for ${taskId}`);
+        if (!response.success) {
+            showNewMessage(`错误: ${response.message}`, 'error');
             return;
         }
-        const task = result.data;
-        // Populate the form
+        
+        const task = response.data;
+        
+        // 填充表单的所有字段，确保不遗漏任何配置
         form.task_id.value = task.task_id;
         form.task_name.value = task.task_name;
         form.task_schedule.value = task.task_schedule;
         form.task_exec.value = task.task_exec;
-        form.task_desc.value = task.task_desc;
+        form.task_desc.value = task.task_desc || '';
+        
+        // 填充高级配置字段
+        form.task_timeout.value = task.task_timeout || 300;
+        form.task_retry.value = task.task_retry || 0;
+        form.task_retry_interval.value = task.task_retry_interval || 60;
+        form.task_log.value = task.task_log || `logs/task_${task.task_id}.log`;
+        
+        // 保存当前的启用状态，但不在表单中显示
         form.task_enabled.value = task.task_enabled.toString();
         
         document.getElementById('editModalTitle').innerText = `编辑任务: ${task.task_name}`;
@@ -1455,48 +1527,66 @@ function closeEditModal() {
     document.getElementById('editTaskModal').style.display = 'none';
 }
 
+// 编辑任务表单提交处理
 document.getElementById('editTaskForm').addEventListener('submit', async function(e) {
     e.preventDefault();
     const form = e.target;
     const taskId = form.task_id.value;
-    const taskData = {
-        task_id: taskId,
-        task_name: form.task_name.value,
-        task_schedule: form.task_schedule.value,
-        task_exec: form.task_exec.value,
-        task_desc: form.task_desc.value,
-        task_enabled: form.task_enabled.value === 'true',
-        // 确保只发送后端期望的字段，过滤掉如 next_run_time 等只读字段
-        task_timeout: parseInt(form.task_timeout ? form.task_timeout.value : 300), // 从表单获取或使用默认值
-        task_retry: parseInt(form.task_retry ? form.task_retry.value : 0), // 从表单获取或使用默认值
-        task_retry_interval: parseInt(form.task_retry_interval ? form.task_retry_interval.value : 60), // 从表单获取或使用默认值
-        task_log: form.task_log ? form.task_log.value : `logs/task_${taskId}.log`, // 从表单获取或使用默认值
-        task_env: {}, // 假设前端不编辑环境变量
-        task_dependencies: [], // 假设前端不编辑依赖
-        task_notify: {} // 假设前端不编辑通知
-    };
-
-    const errorMessageDiv = document.getElementById('editTaskErrorMessage');
-    errorMessageDiv.textContent = ''; // Clear previous errors
-
+    
+    // 获取原始任务数据，以保留未在表单中显示的字段
     try {
-        const response = await fetch(`${NEW_API_BASE_URL}/api/scheduler/tasks/${taskId}`, {
+        const response = await fetchApi(`${NEW_API_BASE_URL}/api/scheduler/tasks/${taskId}`, {}, `getOriginalTask for ${taskId}`);
+        if (!response.success) {
+            const errorMessageDiv = document.getElementById('editTaskErrorMessage');
+            errorMessageDiv.textContent = `获取原始任务数据失败: ${response.message}`;
+            return;
+        }
+        
+        const originalTask = response.data;
+        
+        // 创建更新数据，只更新表单中的字段，保留其他字段的原始值
+        const taskData = {
+            task_id: taskId,
+            task_name: form.task_name.value,
+            task_schedule: form.task_schedule.value,
+            task_exec: form.task_exec.value,
+            task_desc: form.task_desc.value,
+            task_enabled: form.task_enabled.value === 'true',
+            task_timeout: parseInt(form.task_timeout.value),
+            task_retry: parseInt(form.task_retry.value),
+            task_retry_interval: parseInt(form.task_retry_interval.value),
+            task_log: form.task_log.value,
+            // 保留原始值
+            task_env: originalTask.task_env || {},
+            task_dependencies: originalTask.task_dependencies || [],
+            task_notify: originalTask.task_notify || {}
+        };
+        
+        // 添加唯一请求ID，防止重复提交
+        const requestId = `edit_${taskId}_${Date.now()}`;
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-Request-ID': requestId
+        };
+        
+        // 发送更新请求
+        const result = await fetchApi(`${NEW_API_BASE_URL}/api/scheduler/tasks/${taskId}`, {
             method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
+            headers: headers,
             body: JSON.stringify(taskData)
-        });
-        const result = await response.json();
+        }, `updateTask for ${taskId}`);
+        
         if (result.success) {
             showNewMessage('任务更新成功!', 'success');
             closeEditModal();
-            loadNewTasks(); // Refresh the task list
+            loadNewTasks(false); // 静默刷新任务列表
         } else {
+            const errorMessageDiv = document.getElementById('editTaskErrorMessage');
             errorMessageDiv.textContent = `更新失败: ${result.message}`;
-            showNewMessage(`更新失败: ${result.message}`, 'error');
         }
     } catch (error) {
-        errorMessageDiv.textContent = `网络错误: ${error.message}`;
-        showNewMessage(`网络错误: ${error.message}`, 'error');
+        const errorMessageDiv = document.getElementById('editTaskErrorMessage');
+        errorMessageDiv.textContent = `更新失败: ${error.message}`;
     }
 });
 
