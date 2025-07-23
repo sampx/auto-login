@@ -578,20 +578,130 @@ def toggle_task_enabled(task_id):
         logger.error(f"API接口: 切换任务 {task_id} 状态时发生异常: {e}")
         return jsonify({"success": False, "message": str(e)}), 500
 
+class DeleteTaskTransactionManager:
+    """为任务删除操作提供事务管理的上下文管理器"""
+    
+    def __init__(self, task_id, task_info):
+        self.task_id = task_id
+        self.task_info = task_info
+        self.backup_dir = tempfile.mkdtemp(prefix=f"task_delete_{self.task_id}_backup_")
+        self.logger = logging.getLogger(__name__)
+
+    def __enter__(self):
+        """开始事务，备份所有相关文件"""
+        try:
+            # 备份任务目录
+            task_dir = os.path.join("tasks", self.task_id)
+            if os.path.exists(task_dir):
+                shutil.copytree(task_dir, os.path.join(self.backup_dir, "task_dir"))
+
+            # 备份日志文件
+            log_file_path = self.task_info.get('task_log', f'logs/task_{self.task_id}.log')
+            log_dir = os.path.dirname(log_file_path)
+            log_basename = os.path.basename(log_file_path)
+            if os.path.exists(log_dir):
+                backup_log_dir = os.path.join(self.backup_dir, "logs")
+                os.makedirs(backup_log_dir, exist_ok=True)
+                for filename in os.listdir(log_dir):
+                    if filename.startswith(log_basename):
+                        shutil.copy2(os.path.join(log_dir, filename), os.path.join(backup_log_dir, filename))
+
+            # 备份锁文件
+            lock_file_path = os.path.join(LOCKS_DIR, f"{self.task_id}.lock")
+            if os.path.exists(lock_file_path):
+                backup_lock_dir = os.path.join(self.backup_dir, "locks")
+                os.makedirs(backup_lock_dir, exist_ok=True)
+                shutil.copy2(lock_file_path, os.path.join(backup_lock_dir, os.path.basename(lock_file_path)))
+                
+            self.logger.info(f"API接口: 成功备份任务 {self.task_id} 的相关文件")
+            return self
+        except Exception as e:
+            self.logger.error(f"API接口: 备份任务 {self.task_id} 文件时出错: {e}")
+            self.cleanup()
+            raise
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """结束事务，如果发生异常则回滚"""
+        if exc_type:
+            self.logger.error(f"API接口: 删除任务 {self.task_id} 过程中发生异常，开始回滚...")
+            self.rollback()
+        self.cleanup()
+
+    def rollback(self):
+        """从备份中恢复所有文件"""
+        try:
+            # 恢复任务目录
+            backup_task_dir = os.path.join(self.backup_dir, "task_dir")
+            if os.path.exists(backup_task_dir):
+                task_dir = os.path.join("tasks", self.task_id)
+                if os.path.exists(task_dir):
+                    shutil.rmtree(task_dir)
+                shutil.copytree(backup_task_dir, task_dir)
+
+            # 恢复日志文件
+            backup_log_dir = os.path.join(self.backup_dir, "logs")
+            if os.path.exists(backup_log_dir):
+                log_dir = os.path.dirname(self.task_info.get('task_log', f'logs/task_{self.task_id}.log'))
+                for filename in os.listdir(backup_log_dir):
+                    shutil.copy2(os.path.join(backup_log_dir, filename), os.path.join(log_dir, filename))
+
+            # 恢复锁文件
+            backup_lock_dir = os.path.join(self.backup_dir, "locks")
+            if os.path.exists(backup_lock_dir):
+                lock_file_path = os.path.join(LOCKS_DIR, f"{self.task_id}.lock")
+                shutil.copy2(os.path.join(backup_lock_dir, os.path.basename(lock_file_path)), lock_file_path)
+                
+            self.logger.info(f"API接口: 成功回滚任务 {self.task_id} 的删除操作")
+        except Exception as e:
+            self.logger.error(f"API接口: 回滚任务 {self.task_id} 删除操作失败: {e}")
+
+    def cleanup(self):
+        """清理备份目录"""
+        if os.path.exists(self.backup_dir):
+            shutil.rmtree(self.backup_dir)
+
 @api_bp.route('/api/scheduler/tasks/<task_id>', methods=['DELETE'])
 @with_task_lock
 def delete_task(task_id):
-    """删除任务"""
+    """删除任务，并使用事务确保原子性"""
+    task = scheduler_engine.get_task(task_id)
+    if not task:
+        logger.warning(f"API接口: 删除任务 {task_id} 失败，任务不存在")
+        return jsonify({"success": False, "message": "任务不存在"}), 404
+
     try:
-        if scheduler_engine.remove_task(task_id):
-            logger.info(f"API接口: 成功删除任务 {task_id}")
-            return jsonify({"success": True, "message": "任务删除成功"})
-        else:
-            logger.warning(f"API接口: 删除任务 {task_id} 失败，任务不存在")
-            return jsonify({"success": False, "message": "任务不存在"}), 404
+        with DeleteTaskTransactionManager(task_id, task):
+            # 1. 从调度引擎中移除任务
+            if not scheduler_engine.remove_task(task_id):
+                # 如果移除失败，手动触发异常以进行回滚
+                raise Exception("从调度引擎移除任务失败")
+            
+            logger.info(f"API接口: 成功从调度引擎中删除任务 {task_id}")
+
+            # 2. 清理日志文件
+            log_file_path = task.get('task_log', f'logs/task_{task_id}.log')
+            log_dir = os.path.dirname(log_file_path)
+            log_basename = os.path.basename(log_file_path)
+            
+            if os.path.exists(log_dir):
+                for filename in os.listdir(log_dir):
+                    if filename.startswith(log_basename):
+                        file_to_delete = os.path.join(log_dir, filename)
+                        os.remove(file_to_delete)
+                        logger.info(f"API接口: 已删除日志文件 {file_to_delete}")
+            
+            # 3. 清理锁文件
+            lock_file_path = os.path.join(LOCKS_DIR, f"{task_id}.lock")
+            if os.path.exists(lock_file_path):
+                os.remove(lock_file_path)
+                logger.info(f"API接口: 已删除锁文件 {lock_file_path}")
+
+        return jsonify({"success": True, "message": "任务及相关文件已成功删除"})
+
     except Exception as e:
         logger.error(f"API接口: 删除任务 {task_id} 时发生异常: {e}")
-        return jsonify({"success": False, "message": str(e)}), 500
+        return jsonify({"success": False, "message": f"删除任务失败: {e}"}), 500
+
 
 @api_bp.route('/api/scheduler/tasks/<task_id>/execute', methods=['POST'])
 @with_task_lock
@@ -711,4 +821,3 @@ def clear_task_logs(task_id):
     except Exception as e:
         logger.error(f"API接口: 清空任务 {task_id} 日志时发生异常: {e}")
         return jsonify({"success": False, "message": str(e)}), 500
-
