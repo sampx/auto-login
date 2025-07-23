@@ -56,7 +56,7 @@
       "task_timeout": 5,
       "task_retry": 2,
       "task_retry_interval": 60,
-      "task_enabled": false,
+      "task_enabled": true,
       "task_log": "logs/task_shell_task_test.log",
       "task_env": {},
       "task_dependencies": [],

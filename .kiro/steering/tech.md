@@ -20,7 +20,9 @@ webdriver_manager==3.8.6  # WebDriver management
 playwright==1.48.0        # Browser automation
 APScheduler==3.10.4       # Task scheduling
 Flask==3.0.0              # Web interface
+Flask-CORS==4.0.0         # Cross-origin resource sharing
 psutil==5.9.5             # Process monitoring
+watchdog==3.0.0           # File system monitoring
 ```
 
 ## Build System & Commands
@@ -61,6 +63,25 @@ python test_scheduler.py     # Test generic task scheduler
 python -m pytest test_*.py   # Run all tests
 ```
 
+## Frontend Architecture
+
+### Modular JavaScript Structure
+- **Total Code Reduction**: From 1779 lines (2 files) to 1660 lines (8 modular files)
+- **Zero Function Duplication**: Eliminated all duplicate function definitions
+- **Unified State Management**: Centralized global variable management
+- **Backward Compatibility**: 100% compatible with existing HTML onclick handlers
+
+### Core Modules (`static/js/core/`)
+- **StateManager** (`state.js`): Global state and timer management
+- **APIManager** (`api.js`): Unified API requests with auto-reconnection
+- **Utils** (`utils.js`): Common utilities and helper functions
+- **UIManager** (`ui.js`): UI operations, modals, and messaging
+
+### Feature Modules (`static/js/modules/`)
+- **LogsManager** (`logs.js`): Log viewing and management for both versions
+- **LegacyTasks** (`legacy-tasks.js`): Old version task management
+- **Scheduler** (`scheduler.js`): New version task scheduling with CRUD operations
+
 ## API Endpoints
 
 ### Legacy API (DO NOT MODIFY)
@@ -92,8 +113,9 @@ python -m pytest test_*.py   # Run all tests
 
 - Uses Python's built-in logging module
 - Configurable log levels via `LOG_LEVEL` environment variable
-- Logs stored in `logs/app.log`
+- Logs stored in `logs/` directory with task-specific files
 - Structured logging with timestamps and log levels
+- Centralized logging configuration through `logger_helper.py`
 
 ## Docker Configuration
 

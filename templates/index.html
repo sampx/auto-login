@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Web任务管理器</title>
     <link rel="stylesheet" href="/static/css/style.css">
     <style>
-        .card-header > span:first-child {
+        .card-header>span:first-child {
             margin-right: auto;
         }
 
@@ -23,7 +24,9 @@
         }
 
         @keyframes spinner-border {
-            to { transform: rotate(360deg); }
+            to {
+                transform: rotate(360deg);
+            }
         }
 
         /* 模态窗口样式 */
@@ -35,7 +38,7 @@
             top: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0,0,0,0.4);
+            background-color: rgba(0, 0, 0, 0.4);
         }
 
         .modal-content {
@@ -46,7 +49,7 @@
             width: 80%;
             max-width: 600px;
             border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         }
 
         .modal-header {
@@ -121,22 +124,25 @@
             border-radius: 8px;
             padding: 16px;
             margin-bottom: 12px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
             transition: all 0.2s ease-in-out;
-            border-left: 5px solid #ccc; /* Default border */
+            border-left: 5px solid #ccc;
+            /* Default border */
         }
 
         .new-task-item.task-enabled {
-            border-left-color: #28a745; /* Green for enabled */
+            border-left-color: #28a745;
+            /* Green for enabled */
         }
 
         .new-task-item.task-disabled {
-            border-left-color: #6c757d; /* Gray for disabled */
+            border-left-color: #6c757d;
+            /* Gray for disabled */
             background-color: #f8f9fa;
         }
 
         .new-task-item:hover {
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             transform: translateY(-2px);
         }
 
@@ -144,7 +150,8 @@
             flex-grow: 1;
             cursor: pointer;
             padding-right: 15px;
-            min-width: 0; /* Important for flexbox truncation */
+            min-width: 0;
+            /* Important for flexbox truncation */
         }
 
         .task-primary-info {
@@ -179,7 +186,8 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            margin-bottom: 8px; /* Add margin to separate from next run time */
+            margin-bottom: 8px;
+            /* Add margin to separate from next run time */
         }
 
         .task-next-run {
@@ -187,7 +195,7 @@
             color: #17a2b8;
             font-weight: 500;
         }
-        
+
         .task-actions-panel {
             display: flex;
             align-items: center;
@@ -209,11 +217,13 @@
         }
 
         .server-status-indicator.success {
-            background-color: #28a745; /* Green */
+            background-color: #28a745;
+            /* Green */
         }
 
         .server-status-indicator.error {
-            background-color: #dc3545; /* Red */
+            background-color: #dc3545;
+            /* Red */
         }
 
         .server-status-indicator {
@@ -221,20 +231,20 @@
             flex-direction: column;
             gap: 15px;
         }
-        
+
         .status-content {
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 15px;
         }
-        
+
         .status-actions {
             display: flex;
             justify-content: center;
             gap: 15px;
         }
-        
+
         .server-status-indicator button {
             background-color: rgba(255, 255, 255, 0.3);
             border: 1px solid rgba(255, 255, 255, 0.5);
@@ -248,7 +258,7 @@
         .server-status-indicator button:hover {
             background-color: rgba(255, 255, 255, 0.5);
         }
-        
+
         .reconnect-spinner {
             width: 24px;
             height: 24px;
@@ -257,10 +267,15 @@
             border-radius: 50%;
             animation: spin 1s linear infinite;
         }
-        
+
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
 
         .log-viewer-overlay {
@@ -302,6 +317,7 @@
         }
     </style>
 </head>
+
 <body>
     <!-- 导航栏 -->
     <nav class="navbar">
@@ -341,7 +357,7 @@
                     <div class="card">
                         <div class="card-header">
                             <span>任务列表</span>
-                            <button class="btn btn-primary btn-sm" onclick="loadTasks()">刷新</button>
+                            <button class="btn btn-primary btn-sm" onclick="LegacyTasks.loadTasks()">刷新</button>
                         </div>
                         <div class="card-body">
                             <div id="taskList">
@@ -361,8 +377,10 @@
                             <span id="logTitle">任务日志</span>
                             <div class="log-controls">
                                 <div id="log-refresh-spinner" class="spinner-sm" style="display: none;"></div>
-                                <button id="start-log-refresh-btn" class="btn btn-secondary btn-sm" onclick="startLogRefresh()">自动刷新</button>
-                                <button id="stop-log-refresh-btn" class="btn btn-secondary btn-sm" style="display: none;" onclick="stopLogRefresh()">停止刷新</button>
+                                <button id="start-log-refresh-btn" class="btn btn-secondary btn-sm"
+                                    onclick="startLogRefresh()">自动刷新</button>
+                                <button id="stop-log-refresh-btn" class="btn btn-secondary btn-sm"
+                                    style="display: none;" onclick="stopLogRefresh()">停止刷新</button>
                                 <button class="btn btn-secondary btn-sm" onclick="clearLogs()">清空日志</button>
                             </div>
                         </div>
@@ -409,8 +427,10 @@
                             <span id="newLogTitle">任务日志</span>
                             <div class="log-controls">
                                 <div id="new-log-refresh-spinner" class="spinner-sm" style="display: none;"></div>
-                                <button id="start-new-log-refresh-btn" class="btn btn-secondary btn-sm" onclick="startNewLogRefresh()">自动刷新</button>
-                                <button id="stop-new-log-refresh-btn" class="btn btn-secondary btn-sm" style="display: none;" onclick="stopNewLogRefresh()">停止刷新</button>
+                                <button id="start-new-log-refresh-btn" class="btn btn-secondary btn-sm"
+                                    onclick="startNewLogRefresh()">自动刷新</button>
+                                <button id="stop-new-log-refresh-btn" class="btn btn-secondary btn-sm"
+                                    style="display: none;" onclick="stopNewLogRefresh()">停止刷新</button>
                                 <button class="btn btn-secondary btn-sm" onclick="clearNewLog()">清空日志</button>
                             </div>
                         </div>
@@ -445,37 +465,41 @@
                                     <input type="text" id="newTaskName" name="task_name" class="form-control" required>
                                 </div>
                             </div>
-                            
+
                             <div class="form-group">
                                 <label for="newTaskDesc">任务描述</label>
                                 <input type="text" id="newTaskDesc" name="task_desc" class="form-control">
                             </div>
-                            
+
                             <div class="form-group">
                                 <label for="newTaskExec">执行命令</label>
                                 <input type="text" id="newTaskExec" name="task_exec" class="form-control" required>
                             </div>
-                            
+
                             <div class="form-group">
                                 <label for="newTaskSchedule">调度表达式（CRON格式）</label>
-                                <input type="text" id="newTaskSchedule" name="task_schedule" class="form-control" required>
+                                <input type="text" id="newTaskSchedule" name="task_schedule" class="form-control"
+                                    required>
                             </div>
-                            
+
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="newTaskTimeout">超时时间（秒）</label>
-                                    <input type="number" id="newTaskTimeout" name="task_timeout" class="form-control" value="300">
+                                    <input type="number" id="newTaskTimeout" name="task_timeout" class="form-control"
+                                        value="300">
                                 </div>
                                 <div class="form-group">
                                     <label for="newTaskRetry">重试次数</label>
-                                    <input type="number" id="newTaskRetry" name="task_retry" class="form-control" value="0">
+                                    <input type="number" id="newTaskRetry" name="task_retry" class="form-control"
+                                        value="0">
                                 </div>
                             </div>
-                            
+
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="newTaskLog">日志文件</label>
-                                    <input type="text" id="newTaskLog" name="task_log" class="form-control" placeholder="logs/task_{task_id}.log">
+                                    <input type="text" id="newTaskLog" name="task_log" class="form-control"
+                                        placeholder="logs/task_{task_id}.log">
                                 </div>
                                 <div class="form-group">
                                     <label for="newTaskEnabled">启用状态</label>
@@ -485,19 +509,21 @@
                                     </select>
                                 </div>
                             </div>
-                            
+
                             <div class="form-row">
                                 <div class="form-group" style="flex: 1; margin-bottom: 0;">
                                     <label>CRON表达式验证工具</label>
-                                    <input type="text" id="cronExpression" class="form-control" placeholder="例如: 0 9 * * *">
+                                    <input type="text" id="cronExpression" class="form-control"
+                                        placeholder="例如: 0 9 * * *">
                                 </div>
                                 <button type="button" class="btn btn-info" onclick="validateCron()">验证</button>
                             </div>
                             <div id="cronResult" style="margin-top: 10px;"></div>
-                            
+
                             <div class="form-row">
                                 <button type="submit" class="btn btn-primary">创建任务</button>
-                                <button type="button" class="btn btn-secondary" onclick="closeCreateTaskModal()">取消</button>
+                                <button type="button" class="btn btn-secondary"
+                                    onclick="closeCreateTaskModal()">取消</button>
                             </div>
                         </form>
                     </div>
@@ -520,7 +546,8 @@
                             </div>
                             <div class="form-group">
                                 <label for="editTaskSchedule">调度表达式 (Cron)</label>
-                                <input type="text" id="editTaskSchedule" name="task_schedule" class="form-control" required>
+                                <input type="text" id="editTaskSchedule" name="task_schedule" class="form-control"
+                                    required>
                             </div>
                             <div class="form-group">
                                 <label for="editTaskExec">执行命令</label>
@@ -543,7 +570,8 @@
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="editTaskRetryInterval">重试间隔（秒）</label>
-                                    <input type="number" id="editTaskRetryInterval" name="task_retry_interval" class="form-control">
+                                    <input type="number" id="editTaskRetryInterval" name="task_retry_interval"
+                                        class="form-control">
                                 </div>
                                 <div class="form-group">
                                     <label for="editTaskLog">日志文件</label>
@@ -558,25 +586,32 @@
                     </div>
                 </div>
             </div>
-    </div>
+        </div>
 
-    <!-- 任务详情模态窗口 -->
-    <div id="taskDetailsModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <span class="close" onclick="closeTaskDetailsModal()">&times;</span>
-                <h2>任务详情</h2>
-            </div>
-            <div class="modal-body">
-                <div id="taskDetailsContent">
-                    <!-- 任务详情内容将在这里动态加载 -->
+        <!-- 任务详情模态窗口 -->
+        <div id="taskDetailsModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <span class="close" onclick="closeTaskDetailsModal()">&times;</span>
+                    <h2>任务详情</h2>
+                </div>
+                <div class="modal-body">
+                    <div id="taskDetailsContent">
+                        <!-- 任务详情内容将在这里动态加载 -->
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- JavaScript -->
-    <script src="/static/js/main.js"></script>
-    <script src="/static/js/fixed_main.js"></script>
+        <!-- JavaScript - 模块化版本 -->
+        <script src="/static/js/core/state.js"></script>
+        <script src="/static/js/core/utils.js"></script>
+        <script src="/static/js/core/api.js"></script>
+        <script src="/static/js/core/ui.js"></script>
+        <script src="/static/js/modules/logs.js"></script>
+        <script src="/static/js/modules/legacy-tasks.js"></script>
+        <script src="/static/js/modules/scheduler.js"></script>
+        <script src="/static/js/main.js"></script>
 </body>
+
 </html>

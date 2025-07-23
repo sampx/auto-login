@@ -4,7 +4,7 @@ inclusion: always
 
 # Automated Website Login System
 
-A scheduled automation system for maintaining account activity through automated logins with email notifications.
+A scheduled automation system for maintaining account activity through automated logins with email notifications, featuring a modern modular web interface.
 
 ## Core Architecture
 
@@ -20,12 +20,18 @@ A scheduled automation system for maintaining account activity through automated
 - **`browser_handler.py`** - Playwright-based browser automation
 - **`email_notifier.py`** - Email notification system
 
+**Frontend Architecture (Modular JavaScript):**
+- **Core Modules**: State management, API handling, utilities, UI operations
+- **Feature Modules**: Logs management, legacy tasks, scheduler functionality
+- **Main Entry**: Coordinated initialization and global event handling
+
 **Service Layers:**
-- **Web Layer**: Single Flask REST API + Static frontend (port 5001)
+- **Web Layer**: Single Flask REST API + Modular frontend architecture (port 5001)
 - **Process Layer**: Subprocess management with signal handling
 - **Automation Layer**: Playwright browser automation (headless Chromium)
 - **Scheduling Layer**: APScheduler for cron/interval triggers
 - **Notification Layer**: SMTP email alerts
+- **Frontend Layer**: Modular JavaScript with state management and API abstraction
 
 ## Code Standards
 
