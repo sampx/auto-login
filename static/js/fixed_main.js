@@ -1,121 +1,183 @@
-// 编辑任务表单提交处理
-function setupEditTaskFormHandler() {
-    const editTaskForm = document.getElementById('editTaskForm');
-    if (!editTaskForm) return;
-    
-    // 移除所有现有的事件监听器
-    const newEditTaskForm = editTaskForm.cloneNode(true);
-    editTaskForm.parentNode.replaceChild(newEditTaskForm, editTaskForm);
-    
-    // 添加新的事件监听器
-    newEditTaskForm.addEventListener('submit', async function(e) {
-        e.preventDefault();
-        const form = e.target;
-        const taskId = form.task_id.value;
-        
-        // 获取原始任务数据，以保留未在表单中显示的字段
-        try {
-            const response = await fetchApi(`${NEW_API_BASE_URL}/api/scheduler/tasks/${taskId}`, {}, `getOriginalTask for ${taskId}`);
-            if (!response.success) {
-                const errorMessageDiv = document.getElementById('editTaskErrorMessage');
-                errorMessageDiv.textContent = `获取原始任务数据失败: ${response.message}`;
-                return;
-            }
-            
-            const originalTask = response.data;
-            
-            // 创建更新数据，只更新表单中的字段，保留其他字段的原始值
-            const taskData = {
-                task_id: taskId,
-                task_name: form.task_name.value,
-                task_schedule: form.task_schedule.value,
-                task_exec: form.task_exec.value,
-                task_desc: form.task_desc.value,
-                task_enabled: form.task_enabled.value === 'true',
-                task_timeout: parseInt(form.task_timeout.value),
-                task_retry: parseInt(form.task_retry.value),
-                task_retry_interval: parseInt(form.task_retry_interval.value),
-                task_log: form.task_log.value,
-                // 保留原始值
-                task_env: originalTask.task_env || {},
-                task_dependencies: originalTask.task_dependencies || [],
-                task_notify: originalTask.task_notify || {}
-            };
-            
-            // 添加唯一请求ID，防止重复提交
-            const requestId = `edit_${taskId}_${Date.now()}`;
-            const headers = {
-                'Content-Type': 'application/json',
-                'X-Request-ID': requestId
-            };
-            
-            // 发送更新请求
-            const result = await fetchApi(`${NEW_API_BASE_URL}/api/scheduler/tasks/${taskId}`, {
-                method: 'PUT',
-                headers: headers,
-                body: JSON.stringify(taskData)
-            }, `updateTask for ${taskId}`);
-            
-            if (result.success) {
-                showNewMessage('任务更新成功!', 'success');
-                closeEditModal();
-                loadNewTasks(false); // 静默刷新任务列表
-            } else {
-                const errorMessageDiv = document.getElementById('editTaskErrorMessage');
-                errorMessageDiv.textContent = `更新失败: ${result.message}`;
-            }
-        } catch (error) {
-            const errorMessageDiv = document.getElementById('editTaskErrorMessage');
-            errorMessageDiv.textContent = `更新失败: ${error.message}`;
-        }
-    });
-}
+// 健康检查定时器
+let healthCheckInterval = null;
+let reconnectActive = true;
 
-// 在页面加载完成后设置事件处理器
-document.addEventListener('DOMContentLoaded', function() {
-    setupEditTaskFormHandler();
-});
-
-// 打开编辑任务模态窗口
-async function openEditModal(taskId) {
-    const modal = document.getElementById('editTaskModal');
-    const form = document.getElementById('editTaskForm');
-    const errorMessageDiv = document.getElementById('editTaskErrorMessage');
-    errorMessageDiv.textContent = ''; // 清除之前的错误信息
+// 停止重连检测
+function stopReconnect() {
+    reconnectActive = false;
+    if (healthCheckInterval) {
+        clearInterval(healthCheckInterval);
+        healthCheckInterval = null;
+    }
     
-    try {
-        const response = await fetchApi(`${NEW_API_BASE_URL}/api/scheduler/tasks/${taskId}`, {}, `openEditModal for ${taskId}`);
-        if (!response.success) {
-            showNewMessage(`错误: ${response.message}`, 'error');
-            return;
-        }
-        
-        const task = response.data;
-        
-        // 填充表单的所有字段，确保不遗漏任何配置
-        form.task_id.value = task.task_id;
-        form.task_name.value = task.task_name;
-        form.task_schedule.value = task.task_schedule;
-        form.task_exec.value = task.task_exec;
-        form.task_desc.value = task.task_desc || '';
-        
-        // 填充高级配置字段
-        form.task_timeout.value = task.task_timeout || 300;
-        form.task_retry.value = task.task_retry || 0;
-        form.task_retry_interval.value = task.task_retry_interval || 60;
-        form.task_log.value = task.task_log || `logs/task_${task.task_id}.log`;
-        
-        // 保存当前的启用状态，但不在表单中显示
-        form.task_enabled.value = task.task_enabled.toString();
-        
-        document.getElementById('editModalTitle').innerText = `编辑任务: ${task.task_name}`;
-        modal.style.display = 'block';
-    } catch (error) {
-        showNewMessage(`网络错误: ${error.message}`, 'error');
+    // 更新UI，移除旋转动画
+    const spinner = document.querySelector('.reconnect-spinner');
+    if (spinner) {
+        spinner.style.animation = 'none';
+        spinner.style.borderTop = '3px solid rgba(255, 255, 255, 0.3)';
+    }
+    
+    // 更新按钮状态
+    const stopBtn = document.getElementById('stop-reconnect-btn');
+    if (stopBtn) {
+        stopBtn.disabled = true;
+        stopBtn.textContent = '已停止检测';
+    }
+    
+    // 更新提示文本
+    const statusText = document.querySelector('#server-status-indicator span');
+    if (statusText) {
+        statusText.textContent = '与服务器连接已断开，已停止自动检测，请联系管理人员。';
     }
 }
 
-// 关闭编辑任务模态窗口
-function closeEditModal() {
-    document.getElementById('editTaskModal').style.display = 'none';
+// 修改handleApiError函数，添加健康检查定时器
+function handleApiError(error, context) {
+    console.error(`API Error (${context}):`, error);
+    if (serverConnected) {
+        serverConnected = false;
+        reconnectActive = true;
+        const indicator = document.getElementById('server-status-indicator');
+        if (indicator) {
+            indicator.style.display = 'flex';
+        }
+        
+        // 停止所有定时器
+        if (logRefreshInterval) {
+            clearInterval(logRefreshInterval);
+            logRefreshInterval = null;
+            // 更新旧版日志刷新按钮和旋转动画状态
+            const spinner = document.getElementById('log-refresh-spinner');
+            const stopBtn = document.getElementById('stop-log-refresh-btn');
+            const startBtn = document.getElementById('start-log-refresh-btn');
+            if (spinner) spinner.style.display = 'none';
+            if (stopBtn) stopBtn.style.display = 'none';
+            if (startBtn) startBtn.style.display = 'inline-block';
+        }
+        
+        if (newLogRefreshInterval) {
+            clearInterval(newLogRefreshInterval);
+            newLogRefreshInterval = null;
+            // 更新新版日志刷新按钮和旋转动画状态
+            const spinner = document.getElementById('new-log-refresh-spinner');
+            const stopBtn = document.getElementById('stop-new-log-refresh-btn');
+            const startBtn = document.getElementById('start-new-log-refresh-btn');
+            if (spinner) spinner.style.display = 'none';
+            if (stopBtn) stopBtn.style.display = 'none';
+            if (startBtn) startBtn.style.display = 'inline-block';
+        }
+        
+        if (statusRefreshInterval) {
+            clearInterval(statusRefreshInterval);
+            statusRefreshInterval = null;
+        }
+        
+        // 重置停止按钮状态
+        const stopBtn = document.getElementById('stop-reconnect-btn');
+        if (stopBtn) {
+            stopBtn.disabled = false;
+            stopBtn.textContent = '停止检测';
+        }
+        
+        // 重置旋转动画
+        const spinner = document.querySelector('.reconnect-spinner');
+        if (spinner) {
+            spinner.style.animation = 'spin 1s linear infinite';
+            spinner.style.borderTop = '3px solid #ffffff';
+        }
+        
+        // 添加：启动健康检查定时器
+        if (!healthCheckInterval) {
+            healthCheckInterval = setInterval(checkServerHealth, 5000); // 每5秒检查一次
+        }
+    }
 }
+
+// 添加健康检查函数
+async function checkServerHealth() {
+    // 如果用户已停止重连检测，则不再尝试
+    if (!reconnectActive) {
+        if (healthCheckInterval) {
+            clearInterval(healthCheckInterval);
+            healthCheckInterval = null;
+        }
+        return;
+    }
+    
+    try {
+        // 使用一个轻量级的API端点来检查服务器状态
+        const response = await fetch('/api/scheduler/tasks', {
+            method: 'GET',
+            headers: {
+                'X-Health-Check': 'true' // 可选：添加一个标记，让后端知道这是健康检查
+            }
+        });
+        
+        if (response.ok) {
+            // 服务器已恢复，停止健康检查定时器
+            if (healthCheckInterval) {
+                clearInterval(healthCheckInterval);
+                healthCheckInterval = null;
+            }
+            
+            // 调用成功处理函数
+            handleApiSuccess();
+        }
+    } catch (error) {
+        // 服务器仍然不可用，继续等待
+        console.log("健康检查：服务器仍然不可用");
+    }
+}
+
+// 改进的API成功处理函数
+function handleApiSuccess() {
+    if (!serverConnected) {
+        serverConnected = true;
+        
+        // 停止健康检查定时器
+        if (healthCheckInterval) {
+            clearInterval(healthCheckInterval);
+            healthCheckInterval = null;
+        }
+        
+        // 隐藏断开连接提示
+        const indicator = document.getElementById('server-status-indicator');
+        if (indicator) {
+            indicator.style.display = 'none';
+        }
+        
+        // 重新启动状态刷新定时器
+        if (!statusRefreshInterval) {
+            statusRefreshInterval = setInterval(refreshTaskStatus, 5000);
+        }
+        
+        // 自动刷新任务列表
+        loadTasks();  // 刷新老版本任务列表
+        loadNewTasks();  // 刷新新版任务列表
+        
+        // 如果当前有选中的任务，重新启动日志刷新
+        if (currentTask) {
+            viewTaskLogs(currentTask);
+        }
+        if (currentNewTaskId) {
+            viewNewLogs(currentNewTaskId, document.getElementById('newLogTitle').textContent.replace('任务日志: ', ''));
+        }
+        
+        // 显示恢复连接的提示消息
+        showMessage('已恢复与服务器的连接', 'success');
+    }
+}
+
+// 扩展页面卸载前清理
+const originalBeforeUnload = window.onbeforeunload;
+window.addEventListener('beforeunload', function(event) {
+    // 调用原始的beforeunload处理程序（如果存在）
+    if (typeof originalBeforeUnload === 'function') {
+        originalBeforeUnload(event);
+    }
+    
+    // 清理健康检查定时器
+    if (healthCheckInterval) {
+        clearInterval(healthCheckInterval);
+    }
+});

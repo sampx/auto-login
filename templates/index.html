@@ -216,8 +216,26 @@
             background-color: #dc3545; /* Red */
         }
 
+        .server-status-indicator {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        .status-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+        
+        .status-actions {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+        
         .server-status-indicator button {
-            margin-left: 15px;
             background-color: rgba(255, 255, 255, 0.3);
             border: 1px solid rgba(255, 255, 255, 0.5);
             color: #fff;
@@ -229,6 +247,20 @@
 
         .server-status-indicator button:hover {
             background-color: rgba(255, 255, 255, 0.5);
+        }
+        
+        .reconnect-spinner {
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top: 3px solid #ffffff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
         .log-viewer-overlay {
@@ -281,8 +313,16 @@
     </nav>
 
     <div id="server-status-indicator" class="server-status-indicator error" style="display: none;">
-        <span>与服务器断开连接，已停止自动刷新。</span>
-        <button onclick="location.reload()">重新加载</button>
+        <div class="status-content">
+            <div class="status-icon">
+                <div class="reconnect-spinner"></div>
+            </div>
+            <span>与服务器连接已断开，请联系管理人员。</span>
+        </div>
+        <div class="status-actions">
+            <button id="stop-reconnect-btn" onclick="stopReconnect()">停止检测</button>
+            <button onclick="location.reload()">重新加载</button>
+        </div>
     </div>
 
     <!-- 主要内容 -->
