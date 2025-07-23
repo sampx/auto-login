@@ -1,0 +1,15 @@
+{
+  "task_id": "test_task",
+  "task_name": "示例 python 任务",
+  "task_exec": "python test_task.py",
+  "task_schedule": "*/1 * * * *",
+  "task_desc": "示例 python 任务",
+  "task_timeout": 300,
+  "task_retry": 0,
+  "task_retry_interval": 60,
+  "task_enabled": false,
+  "task_log": "logs/task_test_task.log",
+  "task_env": {},
+  "task_dependencies": [],
+  "task_notify": {}
+}

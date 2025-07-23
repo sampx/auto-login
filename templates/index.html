@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Web任务管理器</title>
     <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/modern-style.css">
     <style>
         .card-header>span:first-child {
             margin-right: auto;
@@ -472,21 +473,29 @@
                             </div>
 
                             <div class="form-group">
-                                <label for="newTaskExec">执行命令</label>
-                                <input type="text" id="newTaskExec" name="task_exec" class="form-control" required>
+                                <label for="newTaskScriptType">脚本类型</label>
+                                <select id="newTaskScriptType" name="script_type" class="form-control">
+                                    <option value="python">Python</option>
+                                    <option value="shell">Shell</option>
+                                </select>
+                                <small class="form-text text-muted">系统将根据任务ID自动生成执行命令和脚本文件</small>
                             </div>
 
                             <div class="form-group">
                                 <label for="newTaskSchedule">调度表达式（CRON格式）</label>
-                                <input type="text" id="newTaskSchedule" name="task_schedule" class="form-control"
-                                    required>
+                                <div class="input-group">
+                                    <input type="text" id="newTaskSchedule" name="task_schedule" class="form-control"
+                                        required placeholder="例如: 0 9 * * *">
+                                    <button type="button" class="btn btn-info" style="margin-left: -1px; border-top-left-radius: 0; border-bottom-left-radius: 0;" onclick="validateCron()">验证</button>
+                                </div>
+                                <div id="cronResult" style="margin-top: 5px; font-size: 0.85rem;"></div>
                             </div>
 
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="newTaskTimeout">超时时间（秒）</label>
                                     <input type="number" id="newTaskTimeout" name="task_timeout" class="form-control"
-                                        value="300">
+                                        value="10">
                                 </div>
                                 <div class="form-group">
                                     <label for="newTaskRetry">重试次数</label>
@@ -497,29 +506,19 @@
 
                             <div class="form-row">
                                 <div class="form-group">
-                                    <label for="newTaskLog">日志文件</label>
-                                    <input type="text" id="newTaskLog" name="task_log" class="form-control"
-                                        placeholder="logs/task_{task_id}.log">
+                                    <label for="newTaskRetryInterval">重试间隔（秒）</label>
+                                    <input type="number" id="newTaskRetryInterval" name="task_retry_interval" class="form-control"
+                                        value="60">
                                 </div>
-                                <div class="form-group">
-                                    <label for="newTaskEnabled">启用状态</label>
-                                    <select id="newTaskEnabled" name="task_enabled" class="form-control">
-                                        <option value="true">启用</option>
-                                        <option value="false">禁用</option>
-                                    </select>
-                                </div>
+                                <!-- 隐藏字段，日志文件路径自动设置 -->
+                                <input type="hidden" id="newTaskLog" name="task_log">
+                                <!-- 隐藏字段，默认禁用状态 -->
+                                <input type="hidden" id="newTaskEnabled" name="task_enabled" value="false">
                             </div>
 
-                            <div class="form-row">
-                                <div class="form-group" style="flex: 1; margin-bottom: 0;">
-                                    <label>CRON表达式验证工具</label>
-                                    <input type="text" id="cronExpression" class="form-control"
-                                        placeholder="例如: 0 9 * * *">
-                                </div>
-                                <button type="button" class="btn btn-info" onclick="validateCron()">验证</button>
-                            </div>
-                            <div id="cronResult" style="margin-top: 10px;"></div>
-
+                            <!-- 错误消息显示区域 -->
+                            <div id="createTaskErrorMessage" class="text-danger" style="margin-bottom: 15px;"></div>
+                            
                             <div class="form-row">
                                 <button type="submit" class="btn btn-primary">创建任务</button>
                                 <button type="button" class="btn btn-secondary"
@@ -540,23 +539,33 @@
                     <div class="modal-body">
                         <form id="editTaskForm">
                             <input type="hidden" id="editTaskId" name="task_id">
-                            <div class="form-group">
-                                <label for="editTaskName">任务名称</label>
-                                <input type="text" id="editTaskName" name="task_name" class="form-control" required>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="editTaskName">任务名称</label>
+                                    <input type="text" id="editTaskName" name="task_name" class="form-control" required>
+                                </div>
                             </div>
+                            
                             <div class="form-group">
-                                <label for="editTaskSchedule">调度表达式 (Cron)</label>
-                                <input type="text" id="editTaskSchedule" name="task_schedule" class="form-control"
-                                    required>
+                                <label for="editTaskDesc">任务描述</label>
+                                <input type="text" id="editTaskDesc" name="task_desc" class="form-control">
                             </div>
+                            
                             <div class="form-group">
                                 <label for="editTaskExec">执行命令</label>
                                 <input type="text" id="editTaskExec" name="task_exec" class="form-control" required>
                             </div>
+                            
                             <div class="form-group">
-                                <label for="editTaskDesc">任务描述</label>
-                                <textarea id="editTaskDesc" name="task_desc" class="form-control"></textarea>
+                                <label for="editTaskSchedule">调度表达式（CRON格式）</label>
+                                <div class="input-group">
+                                    <input type="text" id="editTaskSchedule" name="task_schedule" class="form-control"
+                                        required placeholder="例如: 0 9 * * *">
+                                    <button type="button" class="btn btn-info" style="margin-left: -1px; border-top-left-radius: 0; border-bottom-left-radius: 0;" onclick="validateCron()">验证</button>
+                                </div>
+                                <div id="editCronResult" style="margin-top: 5px; font-size: 0.85rem;"></div>
                             </div>
+                            
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="editTaskTimeout">超时时间（秒）</label>
@@ -567,6 +576,7 @@
                                     <input type="number" id="editTaskRetry" name="task_retry" class="form-control">
                                 </div>
                             </div>
+                            
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="editTaskRetryInterval">重试间隔（秒）</label>
@@ -574,14 +584,20 @@
                                         class="form-control">
                                 </div>
                                 <div class="form-group">
-                                    <label for="editTaskLog">日志文件</label>
+                                    <label for="editTaskLog">日志文件路径</label>
                                     <input type="text" id="editTaskLog" name="task_log" class="form-control">
                                 </div>
                             </div>
-                            <!-- 移除状态字段，因为有单独的启用/禁用按钮 -->
+                            
+                            <!-- 保持任务启用状态不变 -->
                             <input type="hidden" id="editTaskEnabled" name="task_enabled">
+                            
                             <div id="editTaskErrorMessage" class="text-danger" style="margin-bottom: 15px;"></div>
-                            <button type="submit" class="btn btn-primary">保存更改</button>
+                            
+                            <div class="form-row">
+                                <button type="submit" class="btn btn-primary">保存更改</button>
+                                <button type="button" class="btn btn-secondary" onclick="closeEditModal()">取消</button>
+                            </div>
                         </form>
                     </div>
                 </div>

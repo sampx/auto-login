@@ -19,7 +19,10 @@ const Scheduler = {
         }
 
         try {
+            console.log('开始加载任务列表');
             const result = await APIManager.fetchApi(`${StateManager.getNewApiBaseUrl()}/api/scheduler/tasks`, {}, 'loadNewTasks');
+            console.log('加载任务列表响应内容:', result);
+            
             if (result.success) {
                 this.renderNewTaskList(result.data);
             } else {
@@ -28,6 +31,7 @@ const Scheduler = {
                 }
             }
         } catch (error) {
+            console.error('加载任务列表失败:', error);
             if (showLoading) {
                 taskList.innerHTML = `<div class="text-center text-danger">网络错误，无法加载任务列表。</div>`;
             }
@@ -80,31 +84,68 @@ const Scheduler = {
     async createNewTask(e) {
         e.preventDefault();
         
+        // 显示创建中的提示
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-sm"></span> 创建中...';
+        }
+        
+        // 清除之前的错误消息
+        const errorMessageDiv = document.getElementById('createTaskErrorMessage');
+        if (errorMessageDiv) {
+            errorMessageDiv.textContent = '';
+        }
+        
         const formData = new FormData(e.target);
+        const taskId = formData.get('task_id');
+        const scriptType = formData.get('script_type') || 'python';
+        
+        // 检查任务ID是否包含非法字符
+        if (!/^[a-zA-Z0-9_-]+$/.test(taskId)) {
+            if (errorMessageDiv) {
+                errorMessageDiv.textContent = '创建失败: 任务ID只能包含字母、数字、下划线和连字符';
+            }
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '创建任务';
+            }
+            return;
+        }
+        
+        // 自动设置日志文件路径
+        const logPath = `logs/task_${taskId}.log`;
+        
         const task = {
-            task_id: formData.get('task_id'),
+            task_id: taskId,
             task_name: formData.get('task_name'),
             task_desc: formData.get('task_desc') || '',
-            task_exec: formData.get('task_exec'),
+            script_type: scriptType, // 添加脚本类型字段
             task_schedule: formData.get('task_schedule'),
-            task_timeout: parseInt(formData.get('task_timeout')) || 300,
+            task_timeout: parseInt(formData.get('task_timeout')) || 10,
             task_retry: parseInt(formData.get('task_retry')) || 0,
-            task_retry_interval: 60,
-            task_enabled: formData.get('task_enabled') === 'true',
-            task_log: formData.get('task_log') || `logs/task_${formData.get('task_id')}.log`,
+            task_retry_interval: parseInt(formData.get('task_retry_interval')) || 60,
+            task_enabled: false, // 默认禁用状态
+            task_log: logPath,
             task_env: {},
             task_dependencies: [],
             task_notify: {}
         };
 
         try {
+            console.log('准备创建任务:', task);
+            
+            // 使用APIManager.fetchApi，与其他API调用保持一致
             const result = await APIManager.fetchApi(`${StateManager.getNewApiBaseUrl()}/api/scheduler/tasks`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-Request-ID': `create_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
                 },
                 body: JSON.stringify(task)
             }, 'createNewTask');
+            
+            console.log('创建任务响应:', result);
             
             if (result.success) {
                 UIManager.showNewMessage('任务创建成功', 'success');
@@ -113,7 +154,6 @@ const Scheduler = {
                 await this.loadNewTasks(false);
             } else {
                 // 显示错误消息
-                const errorMessageDiv = document.getElementById('createTaskErrorMessage');
                 if (errorMessageDiv) {
                     errorMessageDiv.textContent = `创建失败: ${result.message}`;
                 } else {
@@ -121,12 +161,18 @@ const Scheduler = {
                 }
             }
         } catch (error) {
+            console.error('创建任务失败:', error);
             // 显示错误消息
-            const errorMessageDiv = document.getElementById('createTaskErrorMessage');
             if (errorMessageDiv) {
-                errorMessageDiv.textContent = `创建失败: 网络错误`;
+                errorMessageDiv.textContent = '创建失败: 网络错误，请检查API服务是否正常运行';
             } else {
-                UIManager.showNewMessage(`创建失败: 网络错误`, 'error');
+                UIManager.showNewMessage('创建失败: 网络错误，请检查API服务是否正常运行', 'error');
+            }
+        } finally {
+            // 恢复按钮状态
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '创建任务';
             }
         }
     },
@@ -216,36 +262,59 @@ const Scheduler = {
 
     // 验证CRON表达式
     async validateCron() {
-        const expression = document.getElementById('cronExpression').value.trim();
-        const resultDiv = document.getElementById('cronResult');
+        // 根据当前活动的表单确定使用哪个输入框
+        const isEditMode = document.getElementById('editTaskModal').style.display === 'block';
+        const inputId = isEditMode ? 'editTaskSchedule' : 'newTaskSchedule';
+        const resultId = isEditMode ? 'editCronResult' : 'cronResult';
+        
+        const expression = document.getElementById(inputId).value.trim();
+        const resultDiv = document.getElementById(resultId);
+        
+        if (!resultDiv) {
+            console.error(`找不到结果显示区域: ${resultId}`);
+            return;
+        }
         
         if (!expression) {
             resultDiv.innerHTML = '<span class="text-danger">请输入CRON表达式</span>';
             return;
         }
 
+        // 显示验证中状态
+        resultDiv.innerHTML = '<span class="text-info"><i class="spinner-sm"></i> 验证中...</span>';
+
         try {
+            console.log('验证CRON表达式:', expression);
+            
+            // 使用APIManager.fetchApi，保持与其他API调用的一致性
             const result = await APIManager.fetchApi(`${StateManager.getNewApiBaseUrl()}/api/scheduler/validate-cron`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ cron: expression })
             }, 'validateCron');
             
+            console.log('CRON验证响应内容:', result);
+            
             if (result.data.valid) {
                 const nextRun = new Date(result.data.next_run);
                 resultDiv.innerHTML = `
-                    <span class="text-success">✅ 有效</span><br>
-                    <small>下次执行时间: ${nextRun.toLocaleString()}</small>
+                    <div class="cron-result valid">
+                        <span class="text-success">✅ 有效</span>
+                        <small>下次执行: ${nextRun.toLocaleString()}</small>
+                    </div>
                 `;
             } else {
                 resultDiv.innerHTML = `
-                    <span class="text-danger">❌ 无效</span><br>
-                    <small>${result.data.error}</small>
+                    <div class="cron-result invalid">
+                        <span class="text-danger">❌ 无效</span>
+                        <small>${result.data.error}</small>
+                    </div>
                 `;
             }
         } catch (error) {
+            console.error('验证CRON表达式失败:', error);
             resultDiv.innerHTML = `<span class="text-danger">验证失败: 网络错误</span>`;
         }
     },
@@ -354,6 +423,12 @@ const Scheduler = {
             errorMessageDiv.textContent = ''; // 清除之前的错误信息
         }
         
+        // 清除之前的验证结果
+        const cronResultDiv = document.getElementById('editCronResult');
+        if (cronResultDiv) {
+            cronResultDiv.innerHTML = '';
+        }
+        
         try {
             const response = await APIManager.fetchApi(`${StateManager.getNewApiBaseUrl()}/api/scheduler/tasks/${taskId}`, {}, `openEditModal for ${taskId}`);
             if (!response.success) {
@@ -364,14 +439,21 @@ const Scheduler = {
             const task = response.data;
             
             if (form) {
+                // 根据执行命令确定脚本类型
+                let scriptType = "python"; // 默认为python
+                if (task.task_exec.startsWith('bash ') || task.task_exec.endsWith('.sh')) {
+                    scriptType = "shell";
+                }
+                
                 // 填充表单的所有字段，确保不遗漏任何配置
                 const fields = {
                     'task_id': task.task_id,
                     'task_name': task.task_name,
                     'task_schedule': task.task_schedule,
                     'task_exec': task.task_exec,
+                    'script_type': scriptType,
                     'task_desc': task.task_desc || '',
-                    'task_timeout': task.task_timeout || 300,
+                    'task_timeout': task.task_timeout || 10, // 默认10秒
                     'task_retry': task.task_retry || 0,
                     'task_retry_interval': task.task_retry_interval || 60,
                     'task_log': task.task_log || `logs/task_${task.task_id}.log`,
@@ -403,11 +485,23 @@ const Scheduler = {
         const form = e.target;
         const taskId = form.task_id.value;
         
+        // 显示更新中的提示
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-sm"></span> 更新中...';
+        }
+        
+        // 清除之前的错误消息
+        const errorMessageDiv = document.getElementById('editTaskErrorMessage');
+        if (errorMessageDiv) {
+            errorMessageDiv.textContent = '';
+        }
+        
         // 获取原始任务数据，以保留未在表单中显示的字段
         try {
             const response = await APIManager.fetchApi(`${StateManager.getNewApiBaseUrl()}/api/scheduler/tasks/${taskId}`, {}, `getOriginalTask for ${taskId}`);
             if (!response.success) {
-                const errorMessageDiv = document.getElementById('editTaskErrorMessage');
                 if (errorMessageDiv) {
                     errorMessageDiv.textContent = `获取原始任务数据失败: ${response.message}`;
                 }
@@ -421,12 +515,12 @@ const Scheduler = {
                 task_id: taskId,
                 task_name: form.task_name.value,
                 task_schedule: form.task_schedule.value,
-                task_exec: form.task_exec.value,
+                task_exec: form.task_exec.value, // 使用表单中的执行命令
                 task_desc: form.task_desc.value,
                 task_enabled: form.task_enabled.value === 'true',
-                task_timeout: parseInt(form.task_timeout.value),
-                task_retry: parseInt(form.task_retry.value),
-                task_retry_interval: parseInt(form.task_retry_interval.value),
+                task_timeout: parseInt(form.task_timeout.value) || 10,
+                task_retry: parseInt(form.task_retry.value) || 0,
+                task_retry_interval: parseInt(form.task_retry_interval.value) || 60,
                 task_log: form.task_log.value,
                 // 保留原始值
                 task_env: originalTask.task_env || {},
@@ -435,16 +529,15 @@ const Scheduler = {
             };
             
             // 添加唯一请求ID，防止重复提交
-            const requestId = `edit_${taskId}_${Date.now()}`;
-            const headers = {
-                'Content-Type': 'application/json',
-                'X-Request-ID': requestId
-            };
+            const requestId = `edit_${taskId}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
             
             // 发送更新请求
             const result = await APIManager.fetchApi(`${StateManager.getNewApiBaseUrl()}/api/scheduler/tasks/${taskId}`, {
                 method: 'PUT',
-                headers: headers,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Request-ID': requestId
+                },
                 body: JSON.stringify(taskData)
             }, `updateTask for ${taskId}`);
             
@@ -453,15 +546,20 @@ const Scheduler = {
                 UIManager.ModalManager.closeEditModal();
                 this.loadNewTasks(false); // 静默刷新任务列表
             } else {
-                const errorMessageDiv = document.getElementById('editTaskErrorMessage');
                 if (errorMessageDiv) {
                     errorMessageDiv.textContent = `更新失败: ${result.message}`;
                 }
             }
         } catch (error) {
-            const errorMessageDiv = document.getElementById('editTaskErrorMessage');
+            console.error('更新任务失败:', error);
             if (errorMessageDiv) {
-                errorMessageDiv.textContent = `更新失败: ${error.message}`;
+                errorMessageDiv.textContent = `更新失败: ${error.name === 'AbortError' ? '请求超时，请稍后重试' : '网络错误'}`;
+            }
+        } finally {
+            // 恢复按钮状态
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '保存更改';
             }
         }
     }

@@ -12,8 +12,8 @@ import time
 import argparse
 from typing import List, Dict, Any
 
-# 添加当前目录到Python路径
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# 添加项目根目录到Python路径
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from scheduler_engine import SchedulerEngine, TaskLoader, TaskExecutor, Task
 
@@ -30,7 +30,7 @@ class SchedulerTester:
         print("="*50)
         
         try:
-            loader = TaskLoader("tasks/config.json")
+            loader = TaskLoader("tasks")
             tasks = loader.load_tasks()
             
             print(f"✅ 成功加载 {len(tasks)} 个任务")
@@ -59,7 +59,7 @@ class SchedulerTester:
             test_task = Task(
                 task_id="test_simple",
                 task_name="简单测试任务",
-                task_exec="python tasks/test_task.py",
+                task_exec="python test_task.py",  # 相对路径，在任务目录内执行
                 task_schedule="* * * * *",
                 task_desc="测试任务执行",
                 task_timeout=60
@@ -201,7 +201,7 @@ class SchedulerTester:
             print("\n🔍 测试实际任务配置中的CRON表达式...")
             try:
                 from scheduler_engine import TaskLoader
-                loader = TaskLoader("tasks/config.json")
+                loader = TaskLoader("tasks")
                 tasks = loader.load_tasks()
                 
                 valid_tasks = 0

@@ -86,18 +86,23 @@ class TaskExecution:
     duration: Optional[float] = None
 
 class ConfigFileHandler(FileSystemEventHandler):
-    """配置文件变更监控处理器"""
+    """任务配置文件变更监控处理器"""
     
-    def __init__(self, scheduler_engine, config_file: str):
+    def __init__(self, scheduler_engine, tasks_dir: str):
         super().__init__()
         self.scheduler_engine = scheduler_engine
-        self.config_file = os.path.abspath(config_file)
+        self.tasks_dir = os.path.abspath(tasks_dir)
         self.logger = logging.getLogger(__name__)
         self.last_modified = 0
         
     def on_modified(self, event):
         """文件修改事件处理"""
-        if event.is_directory or os.path.abspath(event.src_path) != self.config_file:
+        # 只监控 config.json 文件的变更
+        if event.is_directory or not event.src_path.endswith('config.json'):
+            return
+            
+        # 确保是任务目录下的配置文件
+        if not event.src_path.startswith(self.tasks_dir):
             return
             
         current_time = time.time()
@@ -105,64 +110,102 @@ class ConfigFileHandler(FileSystemEventHandler):
             return
         self.last_modified = current_time
         
-        self.logger.info(f"检测到配置文件变更: {event.src_path}，准备重新加载任务...")
+        self.logger.info(f"检测到任务配置文件变更: {event.src_path}，准备重新加载任务...")
         time.sleep(0.5)
         self.scheduler_engine._reload_all_tasks()
 
 class TaskLoader:
     """任务加载器"""
     
-    def __init__(self, config_file: str = "tasks/config.json"):
+    def __init__(self, tasks_dir: str = "tasks"):
         self.logger = logging.getLogger(__name__)
-        self.config_file = config_file
+        self.tasks_dir = tasks_dir
         
     def load_tasks(self) -> List[Task]:
-        """从配置文件加载所有任务"""
-        if not os.path.exists(self.config_file):
-            self.logger.info(f"配置文件 {self.config_file} 不存在，将创建默认配置。")
-            self._create_default_config()
+        """从任务目录加载所有任务"""
+        if not os.path.exists(self.tasks_dir):
+            self.logger.info(f"任务目录 {self.tasks_dir} 不存在，将创建默认任务。")
+            self._create_default_task()
             return []
             
+        tasks = []
         try:
-            with open(self.config_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+            # 扫描任务目录下的所有子目录
+            for item in os.listdir(self.tasks_dir):
+                task_dir = os.path.join(self.tasks_dir, item)
+                if not os.path.isdir(task_dir):
+                    continue
+                    
+                config_file = os.path.join(task_dir, 'config.json')
+                if not os.path.exists(config_file):
+                    self.logger.warning(f"任务目录 {task_dir} 缺少 config.json 文件，已跳过")
+                    continue
                 
-            task_list = data if isinstance(data, list) else data.get('tasks', [])
-            if not task_list:
-                self.logger.warning("配置文件格式错误或任务列表为空。")
-                return []
-                
-            tasks = []
-            for task_data in task_list:
                 try:
+                    with open(config_file, 'r', encoding='utf-8') as f:
+                        task_data = json.load(f)
+                    
                     task = Task(**task_data)
                     if self._validate_task(task):
                         tasks.append(task)
+                        self.logger.debug(f"成功加载任务: {task.task_id}")
                     else:
                         self.logger.warning(f"任务 {task.task_id} 配置无效，已跳过。")
+                        
+                except json.JSONDecodeError as e:
+                    self.logger.error(f"解析任务配置文件 {config_file} 失败: {e}")
                 except TypeError as e:
-                    self.logger.error(f"加载任务数据失败，字段不匹配: {task_data}，错误: {e}")
+                    self.logger.error(f"加载任务数据失败，字段不匹配: {config_file}，错误: {e}")
                 except Exception as e:
-                    self.logger.error(f"解析任务配置时发生未知错误: {e}")
+                    self.logger.error(f"加载任务配置 {config_file} 时发生未知错误: {e}")
                     
+            self.logger.info(f"成功加载 {len(tasks)} 个任务")
             return tasks
             
-        except json.JSONDecodeError as e:
-            self.logger.error(f"解析配置文件 {self.config_file} 失败: {e}")
-            return []
         except Exception as e:
-            self.logger.error(f"加载任务配置文件时发生未知错误: {e}")
+            self.logger.error(f"扫描任务目录时发生未知错误: {e}")
             return []
     
     def save_tasks(self, tasks: List[Task]):
-        """保存任务到配置文件"""
+        """保存任务到各自的配置文件"""
         try:
-            data = {"tasks": [asdict(task) for task in tasks]}
-            with open(self.config_file, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-            self.logger.info(f"成功保存 {len(tasks)} 个任务到配置文件 {self.config_file}")
+            saved_count = 0
+            for task in tasks:
+                task_dir = os.path.join(self.tasks_dir, task.task_id)
+                os.makedirs(task_dir, exist_ok=True)
+                
+                config_file = os.path.join(task_dir, 'config.json')
+                with open(config_file, 'w', encoding='utf-8') as f:
+                    json.dump(asdict(task), f, indent=2, ensure_ascii=False)
+                saved_count += 1
+                
+            self.logger.info(f"成功保存 {saved_count} 个任务到各自的配置文件")
         except Exception as e:
             self.logger.error(f"保存任务配置到文件失败: {e}")
+    
+    def save_task(self, task: Task):
+        """保存单个任务到配置文件"""
+        try:
+            task_dir = os.path.join(self.tasks_dir, task.task_id)
+            os.makedirs(task_dir, exist_ok=True)
+            
+            config_file = os.path.join(task_dir, 'config.json')
+            with open(config_file, 'w', encoding='utf-8') as f:
+                json.dump(asdict(task), f, indent=2, ensure_ascii=False)
+            self.logger.info(f"成功保存任务 {task.task_id} 的配置文件")
+        except Exception as e:
+            self.logger.error(f"保存任务 {task.task_id} 配置文件失败: {e}")
+    
+    def delete_task_files(self, task_id: str):
+        """删除任务的所有文件"""
+        try:
+            task_dir = os.path.join(self.tasks_dir, task_id)
+            if os.path.exists(task_dir):
+                import shutil
+                shutil.rmtree(task_dir)
+                self.logger.info(f"成功删除任务 {task_id} 的目录: {task_dir}")
+        except Exception as e:
+            self.logger.error(f"删除任务 {task_id} 目录失败: {e}")
     
     def _validate_task(self, task: Task) -> bool:
         """验证任务配置"""
@@ -171,33 +214,50 @@ class TaskLoader:
             return False
         return True
     
-    def _create_default_config(self):
-        """创建默认配置文件"""
-        default_tasks = {
-            "tasks": [
-                {
-                    "task_id": "test-task",
-                    "task_name": "测试任务",
-                    "task_desc": "用于测试任务调度引擎的功能",
-                    "task_exec": "tasks/test_task.py",
-                    "task_schedule": "*/5 * * * *",
-                    "task_timeout": 300,
-                    "task_retry": 2,
-                    "task_retry_interval": 60,
-                    "task_enabled": True,
-                    "task_log": "logs/task_test-task.log",
-                    "task_env": {"PARAM1": "值1"},
-                    "task_dependencies": [],
-                    "task_notify": {"on_success": False, "on_failure": True}
-                }
-            ]
-        }
+    def _create_default_task(self):
+        """创建默认任务目录和配置"""
         try:
-            with open(self.config_file, 'w', encoding='utf-8') as f:
-                json.dump(default_tasks, f, indent=2, ensure_ascii=False)
-            self.logger.info(f"已成功创建默认配置文件: {self.config_file}")
+            os.makedirs(self.tasks_dir, exist_ok=True)
+            
+            # 创建默认测试任务
+            default_task_dir = os.path.join(self.tasks_dir, "test-task")
+            os.makedirs(default_task_dir, exist_ok=True)
+            
+            default_config = {
+                "task_id": "test-task",
+                "task_name": "测试任务",
+                "task_desc": "用于测试任务调度引擎的功能",
+                "task_exec": "python test_task.py",
+                "task_schedule": "*/5 * * * *",
+                "task_timeout": 300,
+                "task_retry": 2,
+                "task_retry_interval": 60,
+                "task_enabled": True,
+                "task_log": "logs/task_test-task.log",
+                "task_env": {"PARAM1": "值1"},
+                "task_dependencies": [],
+                "task_notify": {"on_success": False, "on_failure": True}
+            }
+            
+            config_file = os.path.join(default_task_dir, 'config.json')
+            with open(config_file, 'w', encoding='utf-8') as f:
+                json.dump(default_config, f, indent=2, ensure_ascii=False)
+            
+            # 创建简单的测试脚本
+            script_content = '''#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+import time
+print("默认测试任务开始执行...")
+time.sleep(2)
+print("默认测试任务执行完成")
+'''
+            script_file = os.path.join(default_task_dir, 'test_task.py')
+            with open(script_file, 'w', encoding='utf-8') as f:
+                f.write(script_content)
+                
+            self.logger.info(f"已成功创建默认任务目录: {default_task_dir}")
         except Exception as e:
-            self.logger.error(f"创建默认配置文件失败: {e}")
+            self.logger.error(f"创建默认任务失败: {e}")
 
 class TaskExecutor:
     """任务执行器"""
@@ -213,6 +273,10 @@ class TaskExecutor:
         
         self.logger.info(f"开始执行任务 {task.task_id} (执行ID: {execution_id})，命令: {task.task_exec}")
         
+        # 确定任务工作目录
+        task_dir = os.path.join("tasks", task.task_id)
+        original_cwd = os.getcwd()
+        
         try:
             env = self._prepare_environment(task)
             os.makedirs(os.path.dirname(task.task_log), exist_ok=True)
@@ -220,7 +284,12 @@ class TaskExecutor:
             
             cmd, shell = self._prepare_command(task.task_exec)
             
-            with open(task.task_log, 'w', encoding='utf-8') as log_file:
+            # 如果任务目录存在，切换到任务目录执行
+            if os.path.exists(task_dir):
+                os.chdir(task_dir)
+                self.logger.debug(f"切换到任务目录: {task_dir}")
+            
+            with open(os.path.join(original_cwd, task.task_log), 'w', encoding='utf-8') as log_file:
                 self._log_task_start(log_file, task, execution)
                 
                 process = subprocess.Popen(
@@ -238,6 +307,8 @@ class TaskExecutor:
             self._log_execution_error(task, execution, str(e))
         
         finally:
+            # 恢复原始工作目录
+            os.chdir(original_cwd)
             execution.end_time = datetime.now()
             execution.duration = (execution.end_time - execution.start_time).total_seconds()
             if execution_id in self.running_processes:
@@ -482,19 +553,18 @@ class SchedulerEngine:
             self.logger.error(f"添加任务 {task.task_id} 到调度计划失败: {e}")
     
     def _start_file_monitoring(self):
-        """启动配置文件监控"""
+        """启动任务配置文件监控"""
         try:
-            config_path = self.task_loader.config_file
-            if not os.path.exists(config_path):
-                self.logger.warning(f"配置文件 {config_path} 不存在，跳过文件监控")
+            tasks_dir = self.task_loader.tasks_dir
+            if not os.path.exists(tasks_dir):
+                self.logger.warning(f"任务目录 {tasks_dir} 不存在，跳过文件监控")
                 return
                 
-            self.config_handler = ConfigFileHandler(self, config_path)
+            self.config_handler = ConfigFileHandler(self, tasks_dir)
             self.file_observer = Observer()
-            config_dir = os.path.dirname(os.path.abspath(config_path))
-            self.file_observer.schedule(self.config_handler, config_dir, recursive=False)
+            self.file_observer.schedule(self.config_handler, tasks_dir, recursive=True)
             self.file_observer.start()
-            self.logger.info(f"已启动对配置文件 {config_path} 的监控")
+            self.logger.info(f"已启动对任务目录 {tasks_dir} 的配置文件监控")
         except Exception as e:
             self.logger.error(f"启动配置文件监控失败: {e}")
     
@@ -695,7 +765,7 @@ class SchedulerEngine:
             if task.task_enabled:
                 self._add_task_to_scheduler(task)
             self._mark_api_operation()
-            self.task_loader.save_tasks(list(self.tasks.values()))
+            self.task_loader.save_task(task)
             self.logger.info(f"成功添加新任务: {task.task_id}")
             return True
         except Exception as e:
@@ -724,7 +794,8 @@ class SchedulerEngine:
             del self.tasks[task_id]
             
             self._mark_api_operation()
-            self.task_loader.save_tasks(list(self.tasks.values()))
+            # 删除任务目录和文件
+            self.task_loader.delete_task_files(task_id)
             self.logger.info(f"成功移除任务: {task_id}")
             return True
         except Exception as e:
@@ -816,7 +887,7 @@ class SchedulerEngine:
                 self.logger.debug(f"任务 {task.task_id} 已禁用，不会添加到调度计划")
             
             self._mark_api_operation()
-            self.task_loader.save_tasks(list(self.tasks.values()))
+            self.task_loader.save_task(task)
             self.logger.info(f"成功更新任务: {task.task_id}")
             return True
         except Exception as e:
@@ -846,7 +917,7 @@ class SchedulerEngine:
         
         self._mark_api_operation()
         try:
-            self.task_loader.save_tasks(list(self.tasks.values()))
+            self.task_loader.save_task(task)
             self.logger.info(f"任务 {task_id} 状态已更新为: {'启用' if enabled else '禁用'}")
             return True
         except Exception as e:

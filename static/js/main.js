@@ -42,22 +42,8 @@ document.addEventListener('DOMContentLoaded', function() {
         editTaskForm.addEventListener('submit', Scheduler.updateTask.bind(Scheduler));
     }
 
-    // 点击模态窗口外部关闭
-    window.onclick = function(event) {
-        const createTaskModal = document.getElementById('createTaskModal');
-        const editTaskModal = document.getElementById('editTaskModal');
-        const taskDetailsModal = document.getElementById('taskDetailsModal');
-
-        if (event.target == createTaskModal) {
-            UIManager.ModalManager.closeCreateTaskModal();
-        }
-        if (event.target == editTaskModal) {
-            UIManager.ModalManager.closeEditModal();
-        }
-        if (event.target == taskDetailsModal) {
-            UIManager.ModalManager.closeTaskDetailsModal();
-        }
-    }
+    // 移除点击模态窗口外部关闭的功能
+    // 只能通过关闭按钮或取消按钮关闭模态窗口
 });
 
 // 标签页切换时初始化对应内容

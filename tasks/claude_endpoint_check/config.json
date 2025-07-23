@@ -1,0 +1,17 @@
+{
+  "task_id": "claude_endpoint_check",
+  "task_name": "anyrouter api检测",
+  "task_exec": "python claude_endpoint_check.py",
+  "task_schedule": "0 */3 * * *",
+  "task_desc": "检测 anyrouter api 可用性",
+  "task_timeout": 30,
+  "task_retry": 2,
+  "task_retry_interval": 5,
+  "task_enabled": true,
+  "task_log": "logs/task_claude_endpoint_check.log",
+  "task_env": {
+    "_ENV_FILE": "/Users/sam/SynologyDrive/SyncFolder/tools/mac_zsh/cct.zrc"
+  },
+  "task_dependencies": [],
+  "task_notify": {}
+}

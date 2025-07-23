@@ -62,11 +62,25 @@ inclusion: always
 ├── templates/              # Flask HTML templates
 │   └── index.html          # Dual-tab UI (old + new versions)
 ├── tasks/                  # Task scripts directory
-│   ├── config.json         # Task configuration
-│   ├── claude_endpoint_check.py # Claude endpoint check task
-│   ├── test_task.py        # Test task script
-│   ├── example_task_script.py # Example Python task
-│   └── example_task_script.sh # Example shell task
+│   ├── claude_endpoint_check/  # Claude endpoint check task directory
+│   │   ├── config.json         # Task configuration
+│   │   ├── claude_endpoint_check.py # Task script
+│   │   └── README.md           # Task documentation
+│   ├── python_task_test/       # Python task test directory
+│   │   ├── config.json         # Task configuration
+│   │   ├── example_task_script.py # Task script
+│   │   └── README.md           # Task documentation
+│   ├── shell_task_test/        # Shell task test directory
+│   │   ├── config.json         # Task configuration
+│   │   ├── example_task_script.sh # Task script
+│   │   └── README.md           # Task documentation
+│   ├── test_simple/            # Simple test task directory
+│   │   ├── config.json         # Task configuration
+│   │   └── test_task.py        # Task script
+│   └── test_task/              # Test task directory
+│       ├── config.json         # Task configuration
+│       ├── test_task.py        # Task script
+│       └── README.md           # Task documentation
 ├── tests/                  # Test files directory
 │   ├── .env.test           # Test environment configuration
 │   ├── config_extended.json # Extended test configuration

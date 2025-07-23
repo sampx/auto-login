@@ -37,23 +37,14 @@ log_info "========================================"
 # 1. 读取环境变量
 # 使用 :- "default" 来为变量提供一个默认值
 log_info "任务ID: ${TASK_ID:-"unknown"}"
-log_info "自定义环境变量 API_KEY: ${API_KEY:-"未提供"}"
-log_info "自定义环境变量 REGION: ${REGION:-"默认区域"}"
 
 # 2. 模拟业务逻辑
 # 从第一个命令行参数 ($1) 获取模拟的执行结果
 if [ -n "$1" ]; then
   MODE=$1
 else
-  # 如果没有提供参数,则随机选择一种模式
-  RANDOM_CHOICE=$((RANDOM % 3))
-  if [ $RANDOM_CHOICE -eq 0 ]; then
-    MODE="success"
-  elif [ $RANDOM_CHOICE -eq 1 ]; then
-    MODE="business_failure"
-  else
-    MODE="technical_failure"
-  fi
+  # 如果没有提供参数,使用 success  
+  MODE="success"  
 fi
 
 log_info "当前模拟模式为: $MODE"
@@ -82,6 +73,6 @@ case "$MODE" in
     ;;
   *)
     log_error "未知的模式: '$MODE'。请使用 'success', 'business_failure', 或 'technical_failure'。"
-    exit 2 # 将未知模式也视为技术失败
+    exit 1 # 将未知模式也视为业务失败
     ;;
 esac

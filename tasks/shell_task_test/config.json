@@ -1,0 +1,15 @@
+{
+  "task_id": "shell_task_test",
+  "task_name": "标准 shell 命令测试",
+  "task_exec": "bash example_task_script.sh success",
+  "task_schedule": "*/3 * * * *",
+  "task_desc": "shell 任务脚本示例",
+  "task_timeout": 5,
+  "task_retry": 2,
+  "task_retry_interval": 5,
+  "task_enabled": true,
+  "task_log": "logs/task_shell_task_test.log",
+  "task_env": {},
+  "task_dependencies": [],
+  "task_notify": {}
+}

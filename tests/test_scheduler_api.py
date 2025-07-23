@@ -15,7 +15,7 @@ import os
 import sys
 
 class SchedulerAPITest:
-    def __init__(self, port=5002):
+    def __init__(self, port=5001):
         self.port = port
         self.base_url = f"http://localhost:{port}"
         self.server_process = None
@@ -26,32 +26,39 @@ class SchedulerAPITest:
         try:
             # 检查端口是否被占用
             try:
-                requests.get(f"{self.base_url}/api/scheduler/tasks", timeout=2)
-                print("⚠️  端口已被占用，尝试关闭现有进程...")
-                os.system(f"pkill -f 'scheduler_api.py'")
-                time.sleep(2)
+                response = requests.get(f"{self.base_url}/api/scheduler/tasks", timeout=2)
+                if response.status_code == 200:
+                    print("✅ API服务器已经在运行")
+                    return True
+                else:
+                    print(f"⚠️  API服务器响应异常: {response.status_code}")
             except requests.exceptions.RequestException:
-                pass  # 端口未占用
-            
-            # 启动服务器
-            self.server_process = subprocess.Popen([
-                sys.executable, "scheduler_api.py"
-            ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            
-            # 等待服务器启动
-            max_wait = 10
-            for i in range(max_wait):
-                try:
-                    response = requests.get(f"{self.base_url}/api/scheduler/tasks", timeout=2)
-                    if response.status_code == 200:
-                        print("✅ API服务器启动成功")
-                        return True
-                except requests.exceptions.RequestException:
-                    pass
-                time.sleep(1)
+                print("⚠️  API服务器未运行，尝试启动...")
                 
-            print("❌ API服务器启动失败")
-            return False
+                # 启动服务器
+                env = os.environ.copy()
+                env["PYTHONPATH"] = os.getcwd()
+                self.server_process = subprocess.Popen([
+                    sys.executable, "app.py"
+                ], stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
+                
+                # 等待服务器启动
+                max_wait = 15
+                for i in range(max_wait):
+                    try:
+                        response = requests.get(f"{self.base_url}/api/scheduler/tasks", timeout=2)
+                        if response.status_code == 200:
+                            print("✅ API服务器启动成功")
+                            return True
+                    except requests.exceptions.RequestException:
+                        pass
+                    print(f"⏳ 等待API服务器启动... ({i+1}/{max_wait})")
+                    time.sleep(1)
+                
+                print("❌ API服务器启动失败")
+                return False
+            
+            return True
             
         except Exception as e:
             print(f"❌ 启动服务器错误: {e}")
@@ -61,13 +68,17 @@ class SchedulerAPITest:
         """关闭API服务器"""
         print("🛑 关闭API服务器...")
         try:
+            # 只关闭我们启动的服务器进程
             if self.server_process:
+                print("关闭测试启动的API服务器进程...")
                 self.server_process.terminate()
-                self.server_process.wait(timeout=5)
-                
-            # 确保所有相关进程被关闭
-            os.system(f"pkill -f 'scheduler_api.py'")
-            print("✅ API服务器已关闭")
+                try:
+                    self.server_process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self.server_process.kill()
+                print("✅ API服务器已关闭")
+            else:
+                print("⚠️ API服务器由外部启动，保持运行")
             
         except Exception as e:
             print(f"❌ 关闭服务器错误: {e}")
@@ -136,7 +147,7 @@ class SchedulerAPITest:
         new_task = {
             "task_id": "integration_test_task",
             "task_name": "集成测试任务",
-            "task_exec": "python tasks/test_task.py --integration-test",
+            "task_exec": "python test_task.py --integration-test",  # 相对路径，在任务目录内执行
             "task_schedule": "0 */12 * * *",
             "task_desc": "集成测试创建的任务",
             "task_timeout": 120,
@@ -247,9 +258,75 @@ class SchedulerAPITest:
             print("❌ 部分测试失败")
             return False
     
+    def prepare_test_environment(self):
+        """准备测试环境，创建测试任务目录和脚本"""
+        print("🔧 准备测试环境...")
+        try:
+            # 创建测试任务目录
+            task_dir = "tasks/integration_test_task"
+            os.makedirs(task_dir, exist_ok=True)
+            
+            # 创建测试任务脚本
+            script_content = '''#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+集成测试任务脚本
+用于API集成测试
+"""
+
+import sys
+import time
+import argparse
+
+def main():
+    parser = argparse.ArgumentParser(description='集成测试任务')
+    parser.add_argument('--integration-test', action='store_true', help='运行集成测试模式')
+    args = parser.parse_args()
+    
+    if args.integration_test:
+        print("🧪 集成测试任务开始执行...")
+        time.sleep(1)
+        print("✅ 集成测试任务执行完成")
+    else:
+        print("📋 普通测试任务开始执行...")
+        time.sleep(1)
+        print("✅ 普通测试任务执行完成")
+    
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main())
+'''
+            with open(f"{task_dir}/test_task.py", 'w') as f:
+                f.write(script_content)
+            
+            print("✅ 测试环境准备完成")
+            return True
+        except Exception as e:
+            print(f"❌ 准备测试环境失败: {e}")
+            return False
+    
+    def cleanup_test_environment(self):
+        """清理测试环境，删除测试任务目录"""
+        print("🧹 清理测试环境...")
+        try:
+            # 删除测试任务目录
+            task_dir = "tasks/integration_test_task"
+            if os.path.exists(task_dir):
+                import shutil
+                shutil.rmtree(task_dir)
+            print("✅ 测试环境清理完成")
+        except Exception as e:
+            print(f"❌ 清理测试环境失败: {e}")
+    
     def run(self):
         """运行完整测试流程"""
         try:
+            # 准备测试环境
+            if not self.prepare_test_environment():
+                return False
+            
             # 启动服务器
             if not self.start_server():
                 return False
@@ -271,6 +348,9 @@ class SchedulerAPITest:
         finally:
             # 确保服务器被关闭
             self.stop_server()
+            
+            # 清理测试环境
+            self.cleanup_test_environment()
 
 def main():
     """主函数"""

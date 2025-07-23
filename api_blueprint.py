@@ -2,6 +2,7 @@
 import os
 import logging
 import time
+import json
 from flask import Blueprint, jsonify, request
 from dotenv import load_dotenv, set_key
 from scheduler_engine import SchedulerEngine, Task
@@ -100,25 +101,82 @@ def create_task():
     """创建新任务"""
     try:
         data = request.json
-        required_fields = ['task_id', 'task_name', 'task_exec', 'task_schedule']
+        required_fields = ['task_id', 'task_name', 'task_schedule']
         for field in required_fields:
             if field not in data or not data[field]:
                 return jsonify({"success": False, "message": f"缺少必填字段: {field}"}), 400
         
+        task_id = data['task_id']
+        script_type = data.get('script_type', 'python')  # 默认为python
+        
+        # 确定任务目录路径
+        task_dir = os.path.join("tasks", task_id)
+        
+        # 确定脚本文件名和执行命令
+        if script_type == "python":
+            script_name = f"{task_id}.py"
+            task_exec = f"python {script_name}"
+        else:
+            script_name = f"{task_id}.sh"
+            task_exec = f"bash {script_name}"
+        
+        # 添加执行命令到数据中
+        data['task_exec'] = task_exec
+        
+        # 移除script_type字段，因为Task类不接受这个参数
+        if 'script_type' in data:
+            del data['script_type']
+        
+        # 创建Task对象
         task = Task(**data)
         
-        exec_path = task.task_exec
-        if task.task_exec.startswith('python '):
-            parts = task.task_exec.split(' ', 1)
-            if len(parts) > 1:
-                exec_path = parts[1].split()[0]
+        # 创建任务目录
+        if not os.path.exists(task_dir):
+            os.makedirs(task_dir, exist_ok=True)
+            logger.info(f"API接口: 成功创建任务目录 {task_dir}")
         
-        if exec_path.endswith('.py') and not os.path.exists(exec_path):
-            return jsonify({"success": False, "message": f"任务执行文件不存在: {exec_path}"}), 400
+        # 确定模板文件路径
+        if script_type == "python":
+            template_path = "templates/task/python_template.py"
+        else:
+            template_path = "templates/task/shell_template.sh"
         
+        # 目标脚本文件路径
+        script_path = os.path.join(task_dir, script_name)
+        
+        # 如果脚本文件不存在，则从模板创建
+        if not os.path.exists(script_path):
+            if os.path.exists(template_path):
+                with open(template_path, 'r', encoding='utf-8') as src_file:
+                    template_content = src_file.read()
+                    
+                with open(script_path, 'w', encoding='utf-8') as dest_file:
+                    dest_file.write(template_content)
+                    
+                # 如果是shell脚本，设置执行权限
+                if script_type == "shell":
+                    os.chmod(script_path, 0o755)
+                    
+                logger.info(f"API接口: 成功创建任务脚本文件 {script_path}")
+            else:
+                logger.warning(f"API接口: 模板文件 {template_path} 不存在，无法创建脚本文件")
+                return jsonify({"success": False, "message": f"模板文件 {template_path} 不存在"}), 404
+        
+        # 创建或更新config.json文件
+        config_path = os.path.join(task_dir, "config.json")
+        with open(config_path, 'w', encoding='utf-8') as config_file:
+            json.dump(asdict(task), config_file, indent=2, ensure_ascii=False)
+            
+        logger.info(f"API接口: 成功创建任务配置文件 {config_path}")
+        
+        # 添加任务到调度引擎
         if scheduler_engine.add_task(task):
             logger.info(f"API接口: 成功创建任务 {task.task_id}")
-            return jsonify({"success": True, "message": "任务创建成功", "data": asdict(task)})
+            return jsonify({
+                "success": True, 
+                "message": "任务创建成功", 
+                "data": asdict(task)
+            })
         else:
             logger.warning(f"API接口: 创建任务失败，因为任务 {task.task_id} 已存在")
             return jsonify({"success": False, "message": "任务已存在"}), 400
@@ -162,15 +220,18 @@ def update_task(task_id):
             if hasattr(existing_task, key):
                 setattr(existing_task, key, value)
 
-        # 验证执行文件是否存在
+        # 验证执行文件是否存在（在任务目录内）
+        task_dir = os.path.join("tasks", task_id)
         exec_path = existing_task.task_exec
         if existing_task.task_exec.startswith('python '):
             parts = existing_task.task_exec.split(' ', 1)
             if len(parts) > 1:
                 exec_path = parts[1].split()[0]
         
-        if exec_path.endswith('.py') and not os.path.exists(exec_path):
-            return jsonify({"success": False, "message": f"任务执行文件不存在: {exec_path}"}), 400
+        if exec_path.endswith('.py'):
+            full_exec_path = os.path.join(task_dir, exec_path)
+            if not os.path.exists(full_exec_path):
+                return jsonify({"success": False, "message": f"任务执行文件不存在: {full_exec_path}"}), 400
         
         # 使用更新后的完整任务对象进行更新
         if scheduler_engine.update_task(existing_task):
@@ -317,6 +378,8 @@ def clear_task_logs(task_id):
     except Exception as e:
         logger.error(f"API接口: 清空任务 {task_id} 日志时发生异常: {e}")
         return jsonify({"success": False, "message": str(e)}), 500
+
+
 
 # --- Log Viewer API ---
 # Note: This is a simplified version. The original add_log_routes might have more logic.
