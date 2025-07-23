@@ -1,0 +1,15 @@
+{
+  "task_id": "python_task_example",
+  "task_name": "标准示例 python 任务",
+  "task_exec": "python python_task_example.py",
+  "task_schedule": "*/1 * * * *",
+  "task_desc": "",
+  "task_timeout": 10,
+  "task_retry": 0,
+  "task_retry_interval": 5,
+  "task_enabled": false,
+  "task_log": "logs/task_python_task_example.log",
+  "task_env": {},
+  "task_dependencies": [],
+  "task_notify": {}
+}

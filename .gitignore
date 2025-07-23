@@ -18,6 +18,7 @@ parts/
 sdist/
 var/
 logs/
+locks/
 wheels/
 *.egg-info/
 .installed.cfg

@@ -1,0 +1,15 @@
+{
+  "task_id": "shell_task_example",
+  "task_name": "标准示例 shell 任务",
+  "task_exec": "bash shell_task_example.sh",
+  "task_schedule": "*/1 * * * *",
+  "task_desc": "标准示例 shell 任务",
+  "task_timeout": 10,
+  "task_retry": 0,
+  "task_retry_interval": 5,
+  "task_enabled": false,
+  "task_log": "logs/task_shell_task_example.log",
+  "task_env": {},
+  "task_dependencies": [],
+  "task_notify": {}
+}

@@ -1,16 +1,16 @@
 #!/bin/bash
 
 #
-# 任务调度引擎 - 示例任务脚本 (Shell 版本)
+# 任务调度引擎 - 示例任务脚本模版 (Shell 版本)
 #
 # 本脚本旨在演示如何根据《任务脚本开发指南》编写一个标准的、
 # 可被调度引擎管理的 Shell 任务。
 #
 # 使用方法:
-# 1. 在调度引擎的 Web UI 中创建一个新任务。
-# 2. 将“任务执行”字段设置为: /bin/bash tasks/example_task_script.sh <mode>
+# 1. 在调度引擎的 Web UI 中编辑任务。
+# 2. 将“任务执行”字段设置为: /bin/bash tasks/{task_id}.sh <mode>
 #    - <mode> 可以是 success, business_failure, 或 technical_failure
-# 3. 确保脚本有执行权限: chmod +x tasks/example_task_script.sh
+# 3. 确保脚本有执行权限: chmod +x tasks/{task_id}.sh
 # 4. 配置自定义环境变量,例如: API_KEY=your_secret_key, REGION=us-east-1
 # 5. 保存并触发任务,观察其日志和最终状态。
 #
@@ -37,6 +37,7 @@ log_info "========================================"
 # 1. 读取环境变量
 # 使用 :- "default" 来为变量提供一个默认值
 log_info "任务ID: ${TASK_ID:-"unknown"}"
+log_info "任务日志: ${TASK_LOG:-"unknown"}"
 
 # 2. 模拟业务逻辑
 # 从第一个命令行参数 ($1) 获取模拟的执行结果

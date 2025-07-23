@@ -16,26 +16,6 @@ function hideLoading(elementId) {
     // 不做任何操作，内容将被新内容替换
 }
 
-// 显示消息
-function showMessage(message, type = 'info') {
-    const messageContainer = document.getElementById('message-container');
-    if (!messageContainer) return;
-    
-    const alertElement = document.createElement('div');
-    alertElement.className = `alert alert-${type}`;
-    alertElement.textContent = message;
-    
-    messageContainer.innerHTML = ''; // 清空旧消息
-    messageContainer.appendChild(alertElement);
-    
-    // 5秒后自动移除
-    setTimeout(() => {
-        if (alertElement.parentNode) {
-            alertElement.remove();
-        }
-    }, 5000);
-}
-
 // 显示新版消息
 function showNewMessage(message, type = 'info') {
     const container = document.getElementById('new-message-container');
@@ -150,41 +130,6 @@ const ModalManager = {
     }
 };
 
-// 标签页管理
-const TabManager = {
-    // 初始化标签页
-    initTabs() {
-        const tabs = document.querySelectorAll('.tab');
-        const tabContents = document.querySelectorAll('.tab-content');
-        
-        tabs.forEach(tab => {
-            tab.addEventListener('click', function() {
-                // 清除所有定时器
-                StateManager.clearAllIntervals();
-
-                // 移除所有标签页的active类
-                tabs.forEach(t => t.classList.remove('active'));
-                
-                // 移除所有内容区域的active类
-                tabContents.forEach(content => content.classList.remove('active'));
-                
-                // 添加当前标签页的active类
-                this.classList.add('active');
-                
-                // 显示对应的内容区域
-                const target = this.getAttribute('data-target');
-                const targetElement = document.getElementById(target);
-                if (targetElement) {
-                    targetElement.classList.add('active');
-                }
-
-                // 触发自定义事件，通知标签页已切换
-                document.dispatchEvent(new CustomEvent('tabChanged', { detail: { target: target } }));
-            });
-        });
-    }
-};
-
 // 日志刷新控制
 function toggleLogRefresh(isNew, start) {
     const spinner = document.getElementById(isNew ? 'new-log-refresh-spinner' : 'log-refresh-spinner');
@@ -215,11 +160,9 @@ function toggleLogRefresh(isNew, start) {
 window.UIManager = {
     showLoading,
     hideLoading,
-    showMessage,
     showNewMessage,
     showError,
     showSuccess,
     toggleLogRefresh,
-    ModalManager,
-    TabManager
+    ModalManager
 };

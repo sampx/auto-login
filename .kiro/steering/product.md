@@ -2,9 +2,9 @@
 inclusion: always
 ---
 
-# Automated Website Login System
+# Scheduled Automation Aystem
 
-A scheduled automation system for maintaining account activity through automated logins with email notifications, featuring a modern modular web interface.
+A scheduled automation system for all kinds of tasks.
 
 ## Core Architecture
 

@@ -8,10 +8,10 @@
 可被调度引擎管理的 Python 任务。
 
 使用方法:
-1. 在调度引擎的 Web UI 中编辑任务。
-2. 将"任务执行"字段设置为: python tasks/{task_id}.py <mode>
+1. 在调度引擎的 Web UI 中创建一个新任务。
+2. 将"任务执行"字段设置为: python tasks/example_task_script.py <mode>
    - <mode> 可以是 success, business_failure, 或 technical_failure
-3. 确保脚本有执行权限: chmod +x tasks/{task_id}.py
+3. 确保脚本有执行权限: chmod +x tasks/example_task_script.py
 4. 配置自定义环境变量,例如: API_KEY=your_secret_key, REGION=us-east-1
 5. 保存并触发任务,观察其日志和最终状态。
 """
@@ -42,10 +42,7 @@ def main():
     # 1. 读取环境变量
     # 使用 os.environ.get 来为变量提供一个默认值
     task_id = os.environ.get("TASK_ID", "unknown")
-    task_log = os.environ.get("TASK_LOG", "unknown")
-    
     log_info(f"任务ID: {task_id}")
-    log_info(f"任务日志: {task_log}")
 
     # 2. 模拟业务逻辑
     # 从第一个命令行参数获取模拟的执行结果

@@ -8,11 +8,9 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 
 from logger_helper import setup_logging
-from task_manager import get_task_manager
 from scheduler_engine import SchedulerEngine
 
 # --- Blueprints ---
-from legacy_api_blueprint import legacy_api_bp
 from api_blueprint import api_bp, init_scheduler_engine
 
 # --- Initial Setup ---
@@ -30,11 +28,8 @@ logging.getLogger('werkzeug').setLevel(logging.ERROR)
 
 def init_services():
     """Initializes all background services and engines."""
-    global task_manager, scheduler_engine
+    global scheduler_engine
     logger.info("开始初始化所有后台服务...")
-    
-    # Initialize legacy task manager (OLD VERSION - for backward compatibility)
-    task_manager = get_task_manager()
     
     # Initialize new scheduler engine (NEW VERSION - for new features)
     scheduler_engine = SchedulerEngine()
@@ -47,7 +42,6 @@ def init_services():
     logger.info("所有后台服务初始化完成。")
 
 # --- Register Blueprints ---
-app.register_blueprint(legacy_api_bp)
 app.register_blueprint(api_bp)
 
 # --- Core Routes ---
@@ -62,8 +56,6 @@ def send_static(path):
 # --- Signal Handling and Cleanup ---
 def cleanup():
     logger.info("开始清理资源...")
-    if 'task_manager' in globals() and task_manager:
-        task_manager.cleanup()
     if 'scheduler_engine' in globals() and scheduler_engine:
         scheduler_engine.stop()
     logger.info("资源清理完成。")

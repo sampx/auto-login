@@ -344,60 +344,6 @@
 
     <!-- 主要内容 -->
     <div class="container">
-        <!-- 标签页导航 -->
-        <div class="tabs">
-            <div class="tab" data-target="old-tasks">老版本任务管理</div>
-            <div class="tab active" data-target="new-scheduler">新版任务调度器</div>
-        </div>
-
-        <!-- 老版本任务管理标签页 -->
-        <div id="old-tasks" class="tab-content">
-            <div class="task-management-layout">
-                <!-- 任务列表 -->
-                <div class="task-list-section">
-                    <div class="card">
-                        <div class="card-header">
-                            <span>任务列表</span>
-                            <button class="btn btn-primary btn-sm" onclick="LegacyTasks.loadTasks()">刷新</button>
-                        </div>
-                        <div class="card-body">
-                            <div id="taskList">
-                                <div class="text-center">
-                                    <div class="spinner"></div>
-                                    <p>加载中...</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 日志查看区域 -->
-                <div class="log-section">
-                    <div class="card">
-                        <div class="card-header">
-                            <span id="logTitle">任务日志</span>
-                            <div class="log-controls">
-                                <div id="log-refresh-spinner" class="spinner-sm" style="display: none;"></div>
-                                <button id="start-log-refresh-btn" class="btn btn-secondary btn-sm"
-                                    onclick="startLogRefresh()">自动刷新</button>
-                                <button id="stop-log-refresh-btn" class="btn btn-secondary btn-sm"
-                                    style="display: none;" onclick="stopLogRefresh()">停止刷新</button>
-                                <button class="btn btn-secondary btn-sm" onclick="clearLogs()">清空日志</button>
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <div class="log-viewer" id="logViewer">
-                                <div class="log-placeholder">
-                                    <p>请选择一个任务查看日志</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div id="message-container"></div>
-        </div>
-
         <!-- 新版任务调度器标签页 -->
         <div id="new-scheduler" class="tab-content active">
             <div class="task-management-layout">
@@ -407,6 +353,7 @@
                         <div class="card-header">
                             <span>任务列表</span>
                             <div class="task-controls">
+                                <button class="btn btn-primary btn-sm" onclick="Scheduler.loadNewTasks()">刷新</button>
                                 <button class="btn btn-success btn-sm" onclick="showCreateTaskModal()">新建任务</button>
                             </div>
                         </div>
@@ -625,7 +572,6 @@
         <script src="/static/js/core/api.js"></script>
         <script src="/static/js/core/ui.js"></script>
         <script src="/static/js/modules/logs.js"></script>
-        <script src="/static/js/modules/legacy-tasks.js"></script>
         <script src="/static/js/modules/scheduler.js"></script>
         <script src="/static/js/main.js"></script>
 </body>
