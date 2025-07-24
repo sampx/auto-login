@@ -96,6 +96,9 @@ class ConfigFileHandler(FileSystemEventHandler):
         self.tasks_dir = os.path.abspath(tasks_dir)
         self.logger = logging.getLogger(__name__)
         self.last_modified = 0
+        self.last_deleted = 0
+        self.last_created = 0
+        self.last_moved = 0
         
     def on_modified(self, event):
         """文件修改事件处理"""
@@ -115,6 +118,62 @@ class ConfigFileHandler(FileSystemEventHandler):
         self.logger.info(f"检测到任务配置文件变更: {event.src_path}，准备重新加载任务...")
         time.sleep(0.5)
         self.scheduler_engine._reload_single_task(event.src_path)
+    
+    def on_deleted(self, event):
+        """文件或目录删除事件处理"""
+        current_time = time.time()
+        if current_time - self.last_deleted < 1:
+            return
+        self.last_deleted = current_time
+        
+        # 检查是否在任务目录下
+        if not event.src_path.startswith(self.tasks_dir):
+            return
+            
+        # 如果是目录被删除
+        if event.is_directory:
+            self.logger.info(f"检测到任务目录被删除: {event.src_path}")
+            # 延迟处理，避免竞态条件
+            time.sleep(0.5)
+            self.scheduler_engine._reload_all_tasks()
+        else:
+            # 如果是 config.json 文件被删除
+            if event.src_path.endswith('config.json'):
+                self.logger.info(f"检测到任务配置文件被删除: {event.src_path}")
+                time.sleep(0.5)
+                self.scheduler_engine._reload_all_tasks()
+    
+    def on_created(self, event):
+        """文件或目录创建事件处理"""
+        current_time = time.time()
+        if current_time - self.last_created < 1:
+            return
+        self.last_created = current_time
+        
+        # 检查是否在任务目录下
+        if not event.src_path.startswith(self.tasks_dir):
+            return
+            
+        # 如果是新创建的任务目录或 config.json 文件
+        if event.is_directory or event.src_path.endswith('config.json'):
+            self.logger.info(f"检测到新任务目录或文件创建: {event.src_path}")
+            time.sleep(0.5)
+            self.scheduler_engine._reload_all_tasks()
+    
+    def on_moved(self, event):
+        """文件或目录移动事件处理"""
+        current_time = time.time()
+        if current_time - self.last_moved < 1:
+            return
+        self.last_moved = current_time
+        
+        # 检查是否在任务目录下
+        if not (event.src_path.startswith(self.tasks_dir) or event.dest_path.startswith(self.tasks_dir)):
+            return
+            
+        self.logger.info(f"检测到任务文件或目录被移动: {event.src_path} -> {event.dest_path}")
+        time.sleep(0.5)
+        self.scheduler_engine._reload_all_tasks()
 
 class TaskLoader:
     """任务加载器"""
