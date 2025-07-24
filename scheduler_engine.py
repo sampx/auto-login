@@ -113,7 +113,7 @@ class ConfigFileHandler(FileSystemEventHandler):
         
         self.logger.info(f"检测到任务配置文件变更: {event.src_path}，准备重新加载任务...")
         time.sleep(0.5)
-        self.scheduler_engine._reload_all_tasks()
+        self.scheduler_engine._reload_single_task(event.src_path)
 
 class TaskLoader:
     """任务加载器"""
@@ -125,9 +125,8 @@ class TaskLoader:
     def load_tasks(self) -> List[Task]:
         """从任务目录加载所有任务"""
         if not os.path.exists(self.tasks_dir):
-            self.logger.info(f"任务目录 {self.tasks_dir} 不存在，将创建默认任务。")
-            self._create_default_task()
-            return []
+            raise FileNotFoundError(f"任务目录 {self.tasks_dir} 不存在，请检查配置或联系管理员")
+        return []
             
         tasks = []
         try:
@@ -518,7 +517,7 @@ class SchedulerEngine:
             self.polling_stop_event = threading.Event()
             self.last_file_modtimes = {}  # 存储文件最后修改时间
             self.polling_interval = int(os.getenv('TASK_CONFIG_POLLING_INTERVAL', '10'))  # 轮询间隔（秒）
-            self.enable_polling = os.getenv('ENABLE_TASK_CONFIG_POLLING', 'false').lower() == 'true'  # 是否启用轮询
+            self.monitor_type = os.getenv('TASK_CONFIG_MONITOR_TYPE', 'watchdog')  # 监控类型：watchdog 或 polling
             SchedulerEngine._initialized = True
         
     def start(self):
@@ -567,13 +566,100 @@ class SchedulerEngine:
                 self.logger.warning(f"任务目录 {tasks_dir} 不存在，跳过文件监控")
                 return
                 
-            self.config_handler = ConfigFileHandler(self, tasks_dir)
-            self.file_observer = Observer()
-            self.file_observer.schedule(self.config_handler, tasks_dir, recursive=True)
-            self.file_observer.start()
-            self.logger.info(f"已启动对任务目录 {tasks_dir} 的配置文件监控")
+            # 根据配置决定使用哪种监控机制
+            if self.monitor_type == 'polling':
+                # 使用轮询机制
+                self._start_polling_monitoring()
+                self.logger.info(f"已启动对任务目录 {tasks_dir} 的配置文件轮询监控（间隔: {self.polling_interval}秒）")
+            elif self.monitor_type == 'watchdog':
+                # 使用 watchdog 机制
+                self.config_handler = ConfigFileHandler(self, tasks_dir)
+                self.file_observer = Observer()
+                self.file_observer.schedule(self.config_handler, tasks_dir, recursive=True)
+                self.file_observer.start()
+                self.logger.info(f"已启动对任务目录 {tasks_dir} 的配置文件监控")
+            else:
+                self.logger.warning(f"未知的监控类型: {self.monitor_type}，任务配置变更将无法自动检测")
         except Exception as e:
             self.logger.error(f"启动配置文件监控失败: {e}")
+    
+    def _start_polling_monitoring(self):
+        """启动轮询监控"""
+        try:
+            # 初始化 last_file_modtimes 字典，记录所有配置文件的初始修改时间
+            tasks_dir = self.task_loader.tasks_dir
+            pattern = os.path.join(tasks_dir, "*", "config.json")
+            config_files = glob.glob(pattern)
+            for config_file in config_files:
+                try:
+                    mod_time = os.path.getmtime(config_file)
+                    self.last_file_modtimes[config_file] = mod_time
+                except OSError:
+                    # 文件可能已被删除
+                    pass
+            
+            self.polling_stop_event.clear()
+            self.polling_thread = threading.Thread(target=self._polling_worker, daemon=True)
+            self.polling_thread.start()
+        except Exception as e:
+            self.logger.error(f"启动配置文件轮询监控失败: {e}")
+    
+    def _polling_worker(self):
+        """轮询监控工作线程"""
+        tasks_dir = self.task_loader.tasks_dir
+        self.logger.info(f"轮询监控线程已启动，监控目录: {tasks_dir}，轮询间隔: {self.polling_interval}秒")
+        
+        while not self.polling_stop_event.is_set():
+            try:
+                # 查找所有 config.json 文件
+                pattern = os.path.join(tasks_dir, "*", "config.json")
+                config_files = glob.glob(pattern)
+                
+                current_modtimes = {}
+                for config_file in config_files:
+                    try:
+                        mod_time = os.path.getmtime(config_file)
+                        current_modtimes[config_file] = mod_time
+                    except OSError:
+                        # 文件可能已被删除
+                        pass
+                
+                # 检查是否有文件变更
+                changed_files = []
+                for file_path, mod_time in current_modtimes.items():
+                    if file_path not in self.last_file_modtimes or self.last_file_modtimes[file_path] != mod_time:
+                        changed_files.append(file_path)
+                
+                # 检查是否有文件被删除
+                deleted_files = []
+                for file_path in self.last_file_modtimes:
+                    if file_path not in current_modtimes:
+                        deleted_files.append(file_path)
+                
+                # 如果有变更或删除，则重新加载任务
+                if changed_files or deleted_files:
+                    if changed_files:
+                        self.logger.info(f"检测到配置文件变更: {changed_files}")
+                        # 重新加载变更的单个任务
+                        for changed_file in changed_files:
+                            self._reload_single_task(changed_file)
+                    if deleted_files:
+                        self.logger.info(f"检测到配置文件删除: {deleted_files}")
+                        # 重新加载所有任务以处理删除的文件
+                        self._reload_all_tasks()
+                
+                # 更新最后修改时间记录
+                self.last_file_modtimes = current_modtimes
+                
+                # 等待下一个轮询周期
+                self.polling_stop_event.wait(self.polling_interval)
+            except Exception as e:
+                self.logger.error(f"轮询监控过程中发生异常: {e}")
+                # 发生异常时也等待一段时间再继续
+                self.polling_stop_event.wait(self.polling_interval)
+        
+        self.logger.info("轮询监控线程已停止")
+        
     
     def _stop_file_monitoring(self):
         """停止文件监控"""
@@ -584,6 +670,12 @@ class SchedulerEngine:
                 self.logger.info("已停止配置文件监控")
         except Exception as e:
             self.logger.error(f"停止文件监控时发生异常: {e}")
+        
+        # 停止轮询线程
+        if self.polling_thread and self.polling_thread.is_alive():
+            self.polling_stop_event.set()
+            self.polling_thread.join(timeout=5)
+            self.logger.info("已停止配置文件轮询监控")
     
     def _mark_api_operation(self):
         """标记API操作，用于短期内忽略文件变更事件"""
@@ -595,6 +687,89 @@ class SchedulerEngine:
         """检查文件变更是否由最近的API操作触发"""
         with self.api_operation_lock:
             return (time.time() - self.api_operation_timestamp) < 2
+    
+    def _reload_single_task(self, config_file_path: str):
+        """重新加载单个任务配置"""
+        if self._is_api_operation_recent():
+            self.logger.info("检测到由API操作触发的文件变更，跳过本次自动重载")
+            return
+        
+        self.logger.info(f"开始从配置文件重新加载单个任务: {config_file_path}")
+        try:
+            # 从配置文件路径提取任务ID
+            task_id = os.path.basename(os.path.dirname(config_file_path))
+            
+            # 检查任务是否存在
+            if task_id not in self.tasks:
+                self.logger.warning(f"任务 {task_id} 不存在，将作为新任务添加")
+                # 作为新任务添加
+                fresh_tasks = self.task_loader.load_tasks()
+                fresh_task = next((task for task in fresh_tasks if task.task_id == task_id), None)
+                if fresh_task:
+                    self.tasks[task_id] = fresh_task
+                    if fresh_task.task_enabled:
+                        self._add_task_to_scheduler(fresh_task)
+                    self.logger.info(f"成功添加新任务: {task_id}")
+                else:
+                    self.logger.error(f"无法从配置文件加载任务: {config_file_path}")
+                return
+            
+            # 加载新的任务配置
+            task_dir = os.path.join(self.task_loader.tasks_dir, task_id)
+            config_file = os.path.join(task_dir, 'config.json')
+            if not os.path.exists(config_file):
+                self.logger.error(f"任务配置文件不存在: {config_file}")
+                return
+                
+            try:
+                with open(config_file, 'r', encoding='utf-8') as f:
+                    task_data = json.load(f)
+                fresh_task = Task(**task_data)
+            except (json.JSONDecodeError, TypeError) as e:
+                self.logger.error(f"解析任务配置文件失败: {config_file}，错误: {e}")
+                return
+                
+            # 获取当前任务配置
+            current_task = self.tasks[task_id]
+            
+            # 检查任务是否有变更
+            if fresh_task == current_task:
+                self.logger.info(f"任务 {task_id} 配置无变更，跳过更新")
+                return
+                
+            self.logger.info(f"任务 {task_id} 配置发生变更，开始更新...")
+            
+            # 检查日志文件路径是否变更
+            if fresh_task.task_log != current_task.task_log and os.path.exists(current_task.task_log):
+                try:
+                    # 如果旧日志文件存在且与新日志文件不同，则删除旧日志文件
+                    os.remove(current_task.task_log)
+                    self.logger.info(f"已删除任务 {task_id} 的旧日志文件: {current_task.task_log}")
+                except Exception as e:
+                    self.logger.warning(f"删除任务 {task_id} 的旧日志文件失败: {e}")
+            
+            # 检查关键配置是否变更
+            if fresh_task.has_critical_changes(current_task):
+                self.logger.info(f"任务 {task_id} 的关键配置发生变更，将重新调度")
+                
+                # 停止该任务的调度计划
+                if self.scheduler.get_job(task_id):
+                    self.scheduler.remove_job(task_id)
+                
+                # 停止该任务的所有正在执行的进程
+                stopped_count = self.task_executor.stop_all_tasks_by_id(task_id)
+                if stopped_count > 0:
+                    self.logger.info(f"已终止任务 {task_id} 的 {stopped_count} 个正在执行的进程")
+                
+                # 如果任务启用，重新添加到调度器
+                if fresh_task.task_enabled:
+                    self._add_task_to_scheduler(fresh_task)
+            
+            # 更新任务配置
+            self.tasks[task_id] = fresh_task
+            self.logger.info(f"任务 {task_id} 配置更新完成")
+        except Exception as e:
+            self.logger.error(f"重新加载单个任务配置时发生严重错误: {e}")
     
     def _reload_all_tasks(self):
         """重新加载所有任务配置"""

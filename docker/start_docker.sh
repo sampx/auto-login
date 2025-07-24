@@ -25,6 +25,8 @@ docker run -d --name ${CONTAINER_NAME} \
     -v $(dirname $(pwd))/tasks:/app/tasks \
     -v $(dirname $(pwd))/tools:/app/tools \
     -v $(dirname $(pwd))/env:/app/env \
+    -e TASK_CONFIG_MONITOR_TYPE=polling \
+    -e TASK_CONFIG_POLLING_INTERVAL=5 \
     -p 5001:5001 \
     ${IMAGE_NAME}:${TAG}
 

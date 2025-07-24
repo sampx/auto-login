@@ -1,16 +1,16 @@
 {
   "task_id": "claude_endpoint_check",
-  "task_name": "anyrouter api检测",
+  "task_name": "claude api检测",
   "task_exec": "python claude_endpoint_check.py",
   "task_schedule": "0 */3 * * *",
-  "task_desc": "检测 anyrouter api 可用性",
-  "task_timeout": 30,
+  "task_desc": "检测 claude api 可用性",
+  "task_timeout": 10,
   "task_retry": 2,
   "task_retry_interval": 5,
-  "task_enabled": false,
+  "task_enabled": true,
   "task_log": "logs/task_claude_endpoint_check.log",
   "task_env": {
-    "_ENV_FILE": "/app/env/qwcoder.zrc"
+    "_ENV_FILE": "env/qwcoder.zrc"
   },
   "task_dependencies": [],
   "task_notify": {}
