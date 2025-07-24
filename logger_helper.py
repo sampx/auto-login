@@ -20,19 +20,27 @@ def setup_logging():
     log_level = getattr(logging, log_level_str.upper(), logging.INFO)
     root_logger.setLevel(log_level)
 
+    # 设置第三方库的日志级别
+    logging.getLogger('apscheduler').setLevel(logging.WARNING)  # 减少APScheduler的日志输出
+    logging.getLogger('apscheduler.scheduler').setLevel(logging.WARNING)
+    logging.getLogger('watchdog.observers.inotify_buffer').setLevel(logging.WARNING)
+
     logs_dir = 'logs'
     os.makedirs(logs_dir, exist_ok=True)
 
+    # 创建一个通用的格式化器
     formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        '[%(asctime)s] <%(levelname)s> %(name)s: %(message)s',
         '%Y-%m-%d %H:%M:%S'
     )
 
+    # 控制台处理器根据环境变量设置日志级别
     console_handler = logging.StreamHandler()
     console_handler.setLevel(log_level)
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
 
+    # 文件处理器记录所有级别
     sys_log_file = os.path.join(logs_dir, "sys.log")
     file_handler = RotatingFileHandler(
         sys_log_file,
@@ -68,8 +76,11 @@ def get_task_logger(task_id: str):
     os.makedirs(logs_dir, exist_ok=True)
     log_file = os.path.join(logs_dir, f"task_{task_id}.log")
 
-    # 任务日志使用更简洁的格式
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    # 使用与系统日志相同的格式,保持一致性
+    formatter = logging.Formatter(
+        '[%(asctime)s] <%(levelname)s> %(name)s: %(message)s',
+        '%Y-%m-%d %H:%M:%S'
+    )
 
     file_handler = RotatingFileHandler(
         log_file,
@@ -87,8 +98,8 @@ class LoggerHelper:
     """日志帮助类，提供日志读取功能"""
 
     @staticmethod
-    def read_logs(log_file: str = None, task_id: Optional[str] = None, 
-                  level: Optional[str] = None, limit: int = 100, 
+    def read_logs(log_file: Optional[str] = None, task_id: Optional[str] = None,
+                  level: Optional[str] = None, limit: int = 100,
                   offset: int = 0) -> Dict[str, Any]:
         """
         读取和过滤日志

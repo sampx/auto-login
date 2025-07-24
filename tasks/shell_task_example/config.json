@@ -2,7 +2,7 @@
   "task_id": "shell_task_example",
   "task_name": "标准示例 shell 任务",
   "task_exec": "bash shell_task_example.sh",
-  "task_schedule": "*/1 * * * *",
+  "task_schedule": "0 */3 * * *",
   "task_desc": "标准示例 shell 任务",
   "task_timeout": 10,
   "task_retry": 0,

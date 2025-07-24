@@ -31,8 +31,17 @@ task_locks = {}
 # This will be initialized by the main app
 scheduler_engine = None
 
+def validate_scheduler_engine() -> SchedulerEngine:
+    """验证调度引擎是否已初始化"""
+    if not scheduler_engine:
+        raise RuntimeError("调度引擎尚未初始化")
+    return scheduler_engine
+
 def init_scheduler_engine(engine: SchedulerEngine):
+    """初始化调度引擎实例"""
     global scheduler_engine
+    if not engine:
+        raise ValueError("调度引擎实例不能为空")
     scheduler_engine = engine
     
 def acquire_task_lock(task_id, timeout=10):
@@ -267,6 +276,7 @@ class LogManager:
 @api_bp.route('/api/config', methods=['GET'])
 def get_config():
     """获取系统配置"""
+    logger.info("接收到请求: GET /api/config")
     try:
         config = {
             "WEBSITE_URL": os.getenv("WEBSITE_URL", ""),
@@ -289,6 +299,7 @@ def get_config():
 @api_bp.route('/api/config', methods=['POST'])
 def update_config():
     """更新系统配置"""
+    logger.info("接收到请求: POST /api/config")
     try:
         data = request.json
         if not data:
@@ -315,10 +326,11 @@ def update_config():
 @api_bp.route('/api/scheduler/tasks', methods=['GET'])
 def get_all_tasks():
     """获取所有任务列表"""
-    logger.debug("API接口: 收到获取所有任务列表的请求")
+    logger.info("接收到请求: GET /api/scheduler/tasks")
     try:
-        tasks = scheduler_engine.get_tasks()
-        logger.debug(f"API接口: 成功获取所有任务，共 {len(tasks)} 个")
+        engine = validate_scheduler_engine()
+        tasks = engine.get_tasks()
+        logger.info(f"成功获取任务列表，共 {len(tasks)} 个任务")
         return jsonify({"success": True, "data": tasks, "total": len(tasks)})
     except Exception as e:
         logger.error(f"API接口: 获取所有任务列表失败: {e}")
@@ -327,8 +339,10 @@ def get_all_tasks():
 @api_bp.route('/api/scheduler/tasks/<task_id>', methods=['GET'])
 def get_task(task_id):
     """获取指定任务详情"""
+    logger.info(f"接收到请求: GET /api/scheduler/tasks/{task_id}")
     try:
-        task = scheduler_engine.get_task(task_id)
+        engine = validate_scheduler_engine()
+        task = engine.get_task(task_id)
         if task:
             return jsonify({"success": True, "data": task})
         else:
@@ -340,8 +354,11 @@ def get_task(task_id):
 @with_task_lock
 def create_task():
     """创建新任务"""
+    logger.info("接收到请求: POST /api/scheduler/tasks")
     try:
-        data = request.json
+        if not request.is_json:
+            return jsonify({"success": False, "message": "请求必须包含JSON数据"}), 400
+        data = request.get_json()
         required_fields = ['task_id', 'task_name', 'task_schedule']
         for field in required_fields:
             if field not in data or not data[field]:
@@ -354,7 +371,8 @@ def create_task():
             return jsonify({"success": False, "message": "任务ID只能包含字母、数字、下划线和连字符"}), 400
         
         # 先检查任务是否已存在
-        if scheduler_engine.get_task(task_id):
+        engine = validate_scheduler_engine()
+        if engine.get_task(task_id):
             logger.warning(f"API接口: 创建任务失败，因为任务 {task_id} 已存在")
             return jsonify({"success": False, "message": f"任务ID '{task_id}' 已存在，请使用其他ID"}), 400
             
@@ -423,8 +441,9 @@ def create_task():
             logger.info(f"API接口: 成功创建任务配置文件 {config_path}")
             
             # 添加任务到调度引擎
-            if scheduler_engine.add_task(task):
-                logger.info(f"API接口: 成功创建任务 {task.task_id}")
+            if engine.add_task(task):
+                logger.info(f"任务创建成功: {task.task_id}")
+                logger.debug(f"任务详情：目录={task_dir}, 脚本={script_path}")
                 return jsonify({
                     "success": True, 
                     "message": "任务创建成功", 
@@ -443,6 +462,7 @@ def create_task():
 @with_task_lock
 def update_task(task_id):
     """更新任务配置"""
+    logger.info(f"接收到请求: PUT /api/scheduler/tasks/{task_id}")
     # 防止重复更新请求的简单机制
     request_id = request.headers.get('X-Request-ID', '')
     
@@ -459,7 +479,8 @@ def update_task(task_id):
     
     try:
         # 从引擎中获取原始任务
-        existing_task_dict = scheduler_engine.get_task(task_id)
+        engine = validate_scheduler_engine()
+        existing_task_dict = engine.get_task(task_id)
         if not existing_task_dict:
             return jsonify({"success": False, "message": "任务不存在"}), 404
 
@@ -476,26 +497,35 @@ def update_task(task_id):
             data = request.json
             
             # 防止修改任务ID
-            if 'task_id' in data and data['task_id'] != task_id:
-                logger.warning(f"API接口: 尝试修改任务ID从 {task_id} 到 {data['task_id']}，已拒绝")
+            # 保证 data 不为 None
+            if not isinstance(data, dict):
+                return jsonify({"success": False, "message": "无效的请求数据格式"}), 400
+
+            # 检查任务ID
+            task_id_in_data = data.get('task_id')
+            if task_id_in_data and task_id_in_data != task_id:
+                logger.warning(f"尝试修改任务ID从 {task_id} 到 {task_id_in_data}，已拒绝")
                 return jsonify({"success": False, "message": "不允许修改任务ID"}), 400
                 
             # 验证CRON表达式
-            if 'task_schedule' in data and data['task_schedule'] != existing_task.task_schedule:
+            # 检查CRON表达式
+            schedule = data.get('task_schedule')
+            if schedule and schedule != existing_task.task_schedule:
                 try:
-                    trigger = CronTrigger.from_crontab(data['task_schedule'])
+                    trigger = CronTrigger.from_crontab(schedule)
                     next_run = trigger.get_next_fire_time(None, datetime.now())
                     if not next_run:
-                        logger.warning(f"API接口: 无效的CRON表达式: {data['task_schedule']}")
-                        return jsonify({"success": False, "message": f"无效的CRON表达式: {data['task_schedule']}"}), 400
+                        logger.warning(f"无效的CRON表达式: {schedule}")
+                        return jsonify({"success": False, "message": f"无效的CRON表达式: {schedule}"}), 400
                 except Exception as e:
-                    logger.warning(f"API接口: 无效的CRON表达式: {data['task_schedule']}, 错误: {e}")
-                    return jsonify({"success": False, "message": f"无效的CRON表达式: {data['task_schedule']}, 错误: {e}"}), 400
+                    logger.warning(f"无效的CRON表达式: {schedule}, 错误: {e}")
+                    return jsonify({"success": False, "message": f"无效的CRON表达式: {schedule}, 错误: {e}"}), 400
             
             # 更新任务对象
-            for key, value in data.items():
-                if hasattr(existing_task, key):
-                    setattr(existing_task, key, value)
+            if data:
+                for key, value in data.items():
+                    if hasattr(existing_task, key):
+                        setattr(existing_task, key, value)
 
             # 验证执行文件是否存在（在任务目录内）
             task_dir = os.path.join("tasks", task_id)
@@ -542,8 +572,9 @@ def update_task(task_id):
                 return jsonify({"success": False, "message": f"更新任务配置文件失败: {e}"}), 500
             
             # 使用更新后的完整任务对象进行更新
-            if scheduler_engine.update_task(existing_task):
-                logger.info(f"API接口: 成功更新任务 {task_id}")
+            if engine.update_task(existing_task):
+                logger.info(f"任务更新成功: {task_id}")
+                logger.debug(f"更新内容: {data}")
                 
                 # 记录此请求已处理
                 if request_id:
@@ -566,9 +597,14 @@ def update_task(task_id):
 @with_task_lock
 def toggle_task_enabled(task_id):
     """启用或禁用任务"""
+    logger.info(f"接收到请求: POST /api/scheduler/tasks/{task_id}/toggle")
     try:
-        enabled = request.json.get('enabled', True)
-        if scheduler_engine.toggle_task(task_id, enabled):
+        if not request.is_json:
+            return jsonify({"success": False, "message": "请求必须包含JSON数据"}), 400
+        data = request.get_json()
+        enabled = data.get('enabled', True)
+        engine = validate_scheduler_engine()
+        if engine.toggle_task(task_id, enabled):
             logger.info(f"API接口: 任务 {task_id} 已切换为 {'启用' if enabled else '禁用'} 状态")
             return jsonify({"success": True, "message": f"任务已{'启用' if enabled else '禁用'}"})
         else:
@@ -664,7 +700,9 @@ class DeleteTaskTransactionManager:
 @with_task_lock
 def delete_task(task_id):
     """删除任务，并使用事务确保原子性"""
-    task = scheduler_engine.get_task(task_id)
+    logger.info(f"接收到请求: DELETE /api/scheduler/tasks/{task_id}")
+    engine = validate_scheduler_engine()
+    task = engine.get_task(task_id)
     if not task:
         logger.warning(f"API接口: 删除任务 {task_id} 失败，任务不存在")
         return jsonify({"success": False, "message": "任务不存在"}), 404
@@ -672,7 +710,7 @@ def delete_task(task_id):
     try:
         with DeleteTaskTransactionManager(task_id, task):
             # 1. 从调度引擎中移除任务
-            if not scheduler_engine.remove_task(task_id):
+            if not engine.remove_task(task_id):
                 # 如果移除失败，手动触发异常以进行回滚
                 raise Exception("从调度引擎移除任务失败")
             
@@ -707,8 +745,10 @@ def delete_task(task_id):
 @with_task_lock
 def execute_task(task_id):
     """手动触发任务执行"""
+    logger.info(f"接收到请求: POST /api/scheduler/tasks/{task_id}/execute")
     try:
-        if scheduler_engine.execute_task_manually(task_id):
+        engine = validate_scheduler_engine()
+        if engine.execute_task_manually(task_id):
             logger.info(f"API接口: 已成功请求手动执行任务 {task_id}")
             return jsonify({"success": True, "message": f"任务 {task_id} 已加入执行队列"})
         else:
@@ -722,9 +762,12 @@ def execute_task(task_id):
 @with_task_lock
 def run_task_once(task_id):
     """直接运行一次任务"""
+    logger.info(f"接收到请求: POST /api/scheduler/tasks/{task_id}/run-once")
     try:
-        if scheduler_engine.run_task_once(task_id):
-            logger.info(f"API接口: 已成功请求运行一次任务 {task_id}")
+        engine = validate_scheduler_engine()
+        if engine.run_task_once(task_id):
+            logger.info(f"已触发任务执行: {task_id}")
+            logger.debug("任务已加入执行队列，等待后台处理")
             return jsonify({"success": True, "message": f"任务 {task_id} 开始执行"})
         else:
             logger.warning(f"API接口: 运行一次任务 {task_id} 失败，任务不存在")
@@ -736,8 +779,12 @@ def run_task_once(task_id):
 @api_bp.route('/api/scheduler/validate-cron', methods=['POST'])
 def validate_cron():
     """验证cron表达式"""
+    logger.info("接收到请求: POST /api/scheduler/validate-cron")
     try:
-        cron_expr = request.json.get('cron')
+        if not request.is_json:
+            return jsonify({"success": False, "message": "请求必须包含JSON数据"}), 400
+        data = request.get_json()
+        cron_expr = data.get('cron')
         if not cron_expr:
             logger.warning("API接口: CRON 表达式验证失败，请求中未提供表达式")
             return jsonify({"success": False, "message": "缺少cron表达式"}), 400
@@ -757,20 +804,22 @@ def validate_cron():
 @api_bp.route('/api/scheduler/tasks/<task_id>/logs', methods=['GET'])
 def get_task_logs(task_id):
     """获取任务日志"""
+    logger.debug(f"接收到请求: GET /api/scheduler/tasks/{task_id}/logs")
     try:
-        task = scheduler_engine.get_task(task_id)
+        engine = validate_scheduler_engine()
+        task = engine.get_task(task_id)
         if not task:
-            logger.warning(f"API接口: 获取任务 {task_id} 日志失败，任务不存在")
+            logger.warning(f"获取任务 {task_id} 日志失败，任务不存在")
             return jsonify({"success": False, "message": f"任务 {task_id} 不存在"}), 404
         
         log_file = task.get('task_log', f'logs/task_{task_id}.log')
-        logger.debug(f"API接口: 尝试读取任务 {task_id} 的日志文件: {log_file}")
+        logger.debug(f"读取任务日志: {log_file}")
         
         # 检查并轮转日志文件
         LogManager.check_and_rotate_log(log_file)
         
         if not os.path.exists(log_file):
-            logger.debug(f"API接口: 任务 {task_id} 的日志文件不存在")
+            logger.debug(f"任务日志文件不存在: {log_file}")
             return jsonify({"success": True, "data": [], "message": "暂无日志", "log_file": log_file})
         
         # 获取分页参数
@@ -795,8 +844,10 @@ def get_task_logs(task_id):
 @with_task_lock
 def clear_task_logs(task_id):
     """清空指定任务的日志文件"""
+    logger.info(f"接收到请求: POST /api/scheduler/tasks/{task_id}/logs/clear")
     try:
-        task = scheduler_engine.get_task(task_id)
+        engine = validate_scheduler_engine()
+        task = engine.get_task(task_id)
         if not task:
             logger.warning(f"API接口: 清空任务 {task_id} 日志失败，任务不存在")
             return jsonify({"success": False, "message": "任务不存在"}), 404

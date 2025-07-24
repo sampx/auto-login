@@ -271,7 +271,8 @@ class TaskExecutor:
         execution_id = str(uuid.uuid4())
         execution = TaskExecution(task_id=task.task_id, execution_id=execution_id, start_time=datetime.now())
         
-        self.logger.info(f"开始执行任务 {task.task_id} (执行ID: {execution_id})，命令: {task.task_exec}")
+        self.logger.info(f"开始执行任务 {task.task_id} (执行ID: {execution_id})")
+        self.logger.debug(f"执行命令: {task.task_exec}")
         
         # 确定任务工作目录
         task_dir = os.path.join("tasks", task.task_id)
@@ -287,7 +288,7 @@ class TaskExecutor:
             # 如果任务目录存在，切换到任务目录执行
             if os.path.exists(task_dir):
                 os.chdir(task_dir)
-                self.logger.debug(f"切换到任务目录: {task_dir}")
+                self.logger.debug(f"任务工作目录: {task_dir}")
             
             with open(os.path.join(original_cwd, task.task_log), 'w', encoding='utf-8') as log_file:
                 self._log_task_start(log_file, task, execution)
@@ -379,14 +380,15 @@ class TaskExecutor:
         """实时流式传输进程输出"""
         output_lines = []
         try:
-            while True:
-                output = process.stdout.readline()
-                if output == '' and process.poll() is not None:
-                    break
-                if output:
-                    log_file.write(output)
-                    log_file.flush()
-                    output_lines.append(output.rstrip())
+            if process.stdout:
+                while True:
+                    output = process.stdout.readline()
+                    if output == '' and process.poll() is not None:
+                        break
+                    if output:
+                        log_file.write(output)
+                        log_file.flush()
+                        output_lines.append(output.rstrip())
             
             process.wait(timeout=task.task_timeout)
             
@@ -395,7 +397,8 @@ class TaskExecutor:
             
             if process.returncode == 0:
                 execution.status = "success"
-                self.logger.info(f"任务 {task.task_id} 执行成功")
+                self.logger.info(f"任务执行完成: {task.task_id}")
+                self.logger.debug(f"执行结果: 成功 (退出码: 0)")
             elif process.returncode == -15:  # SIGTERM 信号，表示进程被正常终止
                 execution.status = "terminated"
                 execution.error_message = "任务因参数变化或配置更新而终止"
@@ -418,20 +421,42 @@ class TaskExecutor:
             log_file.write(f"\n任务执行超时 (>{task.task_timeout}s)，进程已被终止。\n")
 
     def _log_task_start(self, log_file, task: Task, execution: TaskExecution):
-        log_file.write(f"""========================================\n任务开始: {task.task_name} ({task.task_id})\n执行ID: {execution.execution_id}\n执行时间: {execution.start_time.strftime('%Y-%m-%d %H:%M:%S')}\n执行命令: {task.task_exec}\n========================================\n\n""")
+        timestamp = execution.start_time.strftime('%Y-%m-%d %H:%M:%S')
+        # 基本执行信息用 INFO 级别
+        content = [
+            f"[{timestamp}] <INFO> task_{task.task_id}: 任务开始执行",
+            f"[{timestamp}] <INFO> task_{task.task_id}: - 执行ID: {execution.execution_id}",
+            f"[{timestamp}] <DEBUG> task_{task.task_id}: - 任务名称: {task.task_name}",
+            f"[{timestamp}] <DEBUG> task_{task.task_id}: - 执行命令: {task.task_exec}\n"
+        ]
+        log_file.write('\n'.join(content))
         log_file.flush()
 
     def _log_task_end(self, task: Task, execution: TaskExecution):
         try:
+            if not execution.end_time:
+                execution.end_time = datetime.now()
+            timestamp = execution.end_time.strftime('%Y-%m-%d %H:%M:%S')
             with open(task.task_log, 'a', encoding='utf-8') as log_file:
-                log_file.write(f"""\n========================================\n任务结束: {task.task_name} ({task.task_id})\n结束时间: {execution.end_time.strftime('%Y-%m-%d %H:%M:%S')}\n执行耗时: {execution.duration:.2f} 秒\n状态: {execution.status.upper()}\n返回码: {execution.return_code}\n========================================\n""")
+                content = [
+                    f"\n[{timestamp}] <INFO> task_{task.task_id}: 任务执行结束",
+                    f"[{timestamp}] <INFO> task_{task.task_id}: - 执行耗时: {execution.duration:.2f}秒",
+                    f"[{timestamp}] <{execution.status.upper()}> task_{task.task_id}: - 执行状态: {execution.status}",
+                    f"[{timestamp}] <INFO> task_{task.task_id}: - 返回码: {execution.return_code}\n"
+                ]
+                log_file.write('\n'.join(content))
         except Exception as e:
             self.logger.error(f"无法写入任务 {task.task_id} 的结束日志: {e}")
 
     def _log_execution_error(self, task: Task, execution: TaskExecution, error_msg: str):
         try:
+            timestamp = execution.start_time.strftime('%Y-%m-%d %H:%M:%S')
             with open(task.task_log, 'a', encoding='utf-8') as log_file:
-                log_file.write(f"""\n========================================\n任务执行异常: {task.task_id}\n时间: {execution.start_time.strftime('%Y-%m-%d %H:%M:%S')}\n异常信息: {error_msg}\n========================================\n""")
+                content = [
+                    f"\n[{timestamp}] <ERROR> task_{task.task_id}: 任务执行异常",
+                    f"[{timestamp}] <ERROR> task_{task.task_id}: - 异常信息: {error_msg}\n"
+                ]
+                log_file.write('\n'.join(content))
         except Exception as e:
             self.logger.error(f"无法写入任务 {task.task_id} 的异常日志: {e}")
 
@@ -469,7 +494,8 @@ class TaskExecutor:
         # 由于我们无法直接从进程对象获取任务ID，我们需要停止所有正在运行的进程
         # 这确保了任务更新时不会有旧的进程继续运行
         if process_count > 0:
-            self.logger.info(f"发现 {process_count} 个正在运行的进程，将停止与任务 {task_id} 相关的进程")
+            self.logger.info(f"正在停止任务 {task_id} 相关进程")
+            self.logger.debug(f"系统当前运行进程数: {process_count}")
             
             # 遍历所有正在运行的进程
             for exec_id, process in list(self.running_processes.items()):
@@ -510,7 +536,7 @@ class TaskExecutor:
                 module_name = script_path.replace('.py', '').replace('/', '.').replace('\\', '.')
                 if module_name in sys.modules:
                     del sys.modules[module_name]
-                    self.logger.debug(f"已成功清理Python模块缓存: {module_name}")
+                    self.logger.debug(f"任务运行前清理模块缓存: {module_name}")
         except Exception as e:
             self.logger.debug(f"清理Python模块缓存时发生非关键异常: {e}")
 
@@ -549,7 +575,6 @@ class SchedulerEngine:
         self.logger.info("正在启动任务调度引擎...")
         try:
             tasks = self.task_loader.load_tasks()
-            self.logger.info(f"成功加载 {len(tasks)} 个任务")
         except FileNotFoundError as e:
             self.logger.error(str(e))
             raise
@@ -570,7 +595,7 @@ class SchedulerEngine:
         self.scheduler.shutdown()
         self.logger.info("任务调度引擎已停止")
     
-    def _add_task_to_scheduler(self, task: Task):
+    def _add_task_to_scheduler(self, task: Task, log_add: bool = True):
         """添加任务到调度器"""
         try:
             trigger = CronTrigger.from_crontab(task.task_schedule)
@@ -582,7 +607,8 @@ class SchedulerEngine:
                 max_instances=1,
                 coalesce=True
             )
-            self.logger.info(f"已成功添加任务 {task.task_id} ({task.task_name}) 到调度计划")
+            if log_add:
+                self.logger.info(f"已成功添加任务 {task.task_id} ({task.task_name}) 到调度计划")
         except Exception as e:
             self.logger.error(f"添加任务 {task.task_id} 到调度计划失败: {e}")
     
@@ -667,7 +693,8 @@ class SchedulerEngine:
                 # 如果有变更或删除，则重新加载任务
                 if changed_files or deleted_files:
                     if changed_files:
-                        self.logger.info(f"检测到配置文件变更: {changed_files}")
+                        self.logger.info(f"检测到任务配置变更: {len(changed_files)} 个文件")
+                        self.logger.debug(f"变更文件列表: {changed_files}")
                         # 重新加载变更的单个任务
                         for changed_file in changed_files:
                             self._reload_single_task(changed_file)
@@ -765,7 +792,8 @@ class SchedulerEngine:
                 self.logger.info(f"任务 {task_id} 配置无变更，跳过更新")
                 return
                 
-            self.logger.info(f"任务 {task_id} 配置发生变更，开始更新...")
+            self.logger.info(f"正在更新任务: {task_id}")
+            self.logger.debug("检测到配置变更，开始更新处理")
             
             # 检查日志文件路径是否变更
             if fresh_task.task_log != current_task.task_log and os.path.exists(current_task.task_log):
@@ -916,13 +944,15 @@ class SchedulerEngine:
                 if fresh_task.task_enabled:
                     self._add_task_to_scheduler(fresh_task)
             
-            self.logger.info(f"任务配置重载完成，当前任务总数: {len(self.tasks)}")
+            tasks_count = len(self.tasks)
+            self.logger.info(f"任务配置重载完成，共 {tasks_count} 个任务")
+            self.logger.debug("系统已完成所有任务的重载处理")
         except Exception as e:
             self.logger.error(f"重新加载任务配置时发生严重错误: {e}")
     
     def _execute_task_wrapper(self, task: Task):
         """任务执行的包装器，包含重试逻辑"""
-        self.logger.info(f"调度器触发任务: {task.task_id} ({task.task_name})")
+        self.logger.debug(f"调度器触发任务: {task.task_id} ({task.task_name})")
         current_task = self.tasks.get(task.task_id, task)
         
         for attempt in range(current_task.task_retry + 1):
@@ -942,15 +972,17 @@ class SchedulerEngine:
                 break
             elif execution.return_code == 1:
                 # 退出码 1：业务失败，不重试
-                self.logger.info(f"任务 {current_task.task_id} 业务失败 (退出码: 1)，根据规范不进行重试")
+                self.logger.info(f"任务 {current_task.task_id} 业务失败")
+                self.logger.debug(f"失败原因: 业务错误（退出码: 1），按规范不进行重试")
                 break
             elif execution.return_code == 2:
                 # 退出码 2：技术失败，可以重试
                 if attempt < current_task.task_retry:
-                    self.logger.warning(f"任务 {current_task.task_id} 技术失败 (退出码: 2)，第 {attempt + 1} 次执行失败，将在 {current_task.task_retry_interval} 秒后重试...")
+                    self.logger.info(f"任务 {current_task.task_id} 执行失败（第 {attempt + 1} 次尝试）")
+                    self.logger.debug(f"失败原因: 技术错误（退出码: 2）, 将在 {current_task.task_retry_interval} 秒后重试")
                     time.sleep(current_task.task_retry_interval)
                 else:
-                    self.logger.error(f"任务 {current_task.task_id} 技术失败，已达到最大重试次数 ({current_task.task_retry})")
+                    self.logger.error(f"任务 {current_task.task_id} 技术失败，已达到最大重试次数（{current_task.task_retry}）")
                     break
             elif execution.return_code == -15:  # 明确检查 SIGTERM 信号
                 # 任务被终止（如因参数变化），不重试
@@ -959,7 +991,8 @@ class SchedulerEngine:
             else:
                 # 其他退出码：按技术失败处理，可以重试
                 if attempt < current_task.task_retry:
-                    self.logger.warning(f"任务 {current_task.task_id} 执行失败 (退出码: {execution.return_code})，第 {attempt + 1} 次执行失败，将在 {current_task.task_retry_interval} 秒后重试...")
+                    self.logger.info(f"任务 {current_task.task_id} 执行失败（第 {attempt + 1} 次尝试）")
+                    self.logger.debug(f"失败原因: 未知错误（退出码: {execution.return_code}），将在 {current_task.task_retry_interval} 秒后重试")
                     time.sleep(current_task.task_retry_interval)
                 else:
                     self.logger.error(f"任务 {current_task.task_id} 执行失败，已达到最大重试次数 ({current_task.task_retry})")
@@ -1014,13 +1047,16 @@ class SchedulerEngine:
     
     def get_tasks(self) -> List[Dict[str, Any]]:
         """获取所有任务的列表"""
-        self.logger.debug("正在获取所有任务的详细信息...")
+        task_count = len(self.tasks)
+        self.logger.info(f"开始获取全部任务信息，共 {task_count} 个任务")
         result = []
         for task in self.tasks.values():
             job = self.scheduler.get_job(task.task_id)
             task_dict = asdict(task)
-            task_dict['next_run_time'] = job.next_run_time.isoformat() if job and job.next_run_time else None
+            next_run = job.next_run_time.isoformat() if job and job.next_run_time else None
+            task_dict['next_run_time'] = next_run
             result.append(task_dict)
+            self.logger.debug(f"已读取任务 {task.task_id} 信息，下次执行时间: {next_run}")
         return result
     
     def get_task(self, task_id: str) -> Optional[Dict[str, Any]]:
@@ -1058,7 +1094,7 @@ class SchedulerEngine:
             has_changes = not (task == original_task)
             
             if not has_changes:
-                self.logger.info(f"任务 {task.task_id} 无任何变更，跳过更新")
+                self.logger.debug(f"任务配置检查：{task.task_id} 无变更，跳过更新")
                 return True
             
             self.logger.info(f"任务 {task.task_id} 配置发生变更，开始更新...")
@@ -1082,9 +1118,10 @@ class SchedulerEngine:
             # 停止该任务的所有正在执行的进程
             stopped_count = self.task_executor.stop_all_tasks_by_id(task.task_id)
             if stopped_count > 0:
-                self.logger.info(f"已终止任务 {task.task_id} 的 {stopped_count} 个正在执行的进程")
+                self.logger.info(f"已终止任务 {task.task_id} 的 {stopped_count} 个进程")
+                self.logger.debug(f"进程终止原因：任务配置更新")
             else:
-                self.logger.debug(f"任务 {task.task_id} 当前没有正在执行的进程")
+                self.logger.debug(f"任务 {task.task_id} 当前无运行中的进程")
             
             # 更新任务配置
             self.tasks[task.task_id] = task
@@ -1092,7 +1129,7 @@ class SchedulerEngine:
             # 如果任务启用，重新添加到调度器
             if task.task_enabled:
                 self._add_task_to_scheduler(task)
-                self.logger.info(f"已将任务 {task.task_id} 添加到调度计划")
+                self.logger.debug(f"已将任务 {task.task_id} 添加到调度计划")
             else:
                 self.logger.debug(f"任务 {task.task_id} 已禁用，不会添加到调度计划")
             
@@ -1112,7 +1149,7 @@ class SchedulerEngine:
             
         task = self.tasks[task_id]
         if task.task_enabled == enabled:
-            self.logger.info(f"任务 {task_id} 状态未改变，无需操作")
+            self.logger.debug(f"任务 {task_id} 状态未改变，无需操作")
             return True
             
         task.task_enabled = enabled
