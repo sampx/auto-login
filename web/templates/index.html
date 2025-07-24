@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Web任务管理器</title>
     <link rel="stylesheet" href="/static/css/main.css">
+    <link rel="stylesheet" href="/static/css/task-list.css">
     <style>
         .card-header>span:first-child {
             margin-right: auto;
@@ -115,93 +116,7 @@
             margin: 0;
         }
 
-        /* New Task List Styles */
-        .new-task-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background-color: #ffffff;
-            border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 12px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-            transition: all 0.2s ease-in-out;
-            border-left: 5px solid #ccc;
-            /* Default border */
-        }
-
-        .new-task-item.task-enabled {
-            border-left-color: #28a745;
-            /* Green for enabled */
-        }
-
-        .new-task-item.task-disabled {
-            border-left-color: #6c757d;
-            /* Gray for disabled */
-            background-color: #f8f9fa;
-        }
-
-        .new-task-item:hover {
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            transform: translateY(-2px);
-        }
-
-        .task-info-container {
-            flex-grow: 1;
-            cursor: pointer;
-            padding-right: 15px;
-            min-width: 0;
-            /* Important for flexbox truncation */
-        }
-
-        .task-primary-info {
-            display: flex;
-            align-items: center;
-            margin-bottom: 4px;
-        }
-
-        .task-name {
-            font-weight: 600;
-            font-size: 1.1rem;
-            color: #343a40;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .task-schedule-cron {
-            font-family: 'Courier New', Courier, monospace;
-            background-color: #e9ecef;
-            color: #495057;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-size: 0.9rem;
-            margin-left: 12px;
-            flex-shrink: 0;
-        }
-
-        .task-description-small {
-            font-size: 0.9rem;
-            color: #6c757d;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            margin-bottom: 8px;
-            /* Add margin to separate from next run time */
-        }
-
-        .task-next-run {
-            font-size: 0.85rem;
-            color: #17a2b8;
-            font-weight: 500;
-        }
-
-        .task-actions-panel {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            flex-shrink: 0;
-        }
+        /* 任务列表样式已移至 task-list.css */
 
         /* Server Status Indicator */
         .server-status-indicator {
@@ -440,26 +355,28 @@
                             <div class="form-row">
                                 <div class="form-group">
                                     <label for="newTaskTimeout">超时时间（秒）</label>
-                                    <input type="number" id="newTaskTimeout" name="task_timeout" class="form-control"
-                                        value="10">
+                                    <input type="number" id="newTaskTimeout" name="task_timeout" class="form-control" value="10">
                                 </div>
                                 <div class="form-group">
-                                    <label for="newTaskRetry">重试次数</label>
-                                    <input type="number" id="newTaskRetry" name="task_retry" class="form-control"
-                                        value="0">
+                                    <label for="newTaskRetryCombined">重试策略 (次数/间隔秒)</label>
+                                    <input type="text" id="newTaskRetryCombined" name="task_retry_combined" class="form-control" value="0/0">
                                 </div>
                             </div>
 
                             <div class="form-row">
-                                <div class="form-group">
-                                    <label for="newTaskRetryInterval">重试间隔（秒）</label>
-                                    <input type="number" id="newTaskRetryInterval" name="task_retry_interval" class="form-control"
-                                        value="60">
-                                </div>
                                 <!-- 隐藏字段，日志文件路径自动设置 -->
                                 <input type="hidden" id="newTaskLog" name="task_log">
                                 <!-- 隐藏字段，默认禁用状态 -->
                                 <input type="hidden" id="newTaskEnabled" name="task_enabled" value="false">
+                            </div>
+
+                            <!-- 环境变量 -->
+                            <div class="form-group">
+                                <label>环境变量 (可选)</label>
+                                <div id="createTaskEnvVarsContainer">
+                                    <!-- 动态添加的环境变量将显示在这里 -->
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addEnvVar('create')">添加环境变量</button>
                             </div>
 
                             <!-- 错误消息显示区域 -->
@@ -484,13 +401,18 @@
                     </div>
                     <div class="modal-body">
                         <form id="editTaskForm">
-                            <input type="hidden" id="editTaskId" name="task_id">
-                            <div class="form-row">
+                            <div class="form-row" style="grid-template-columns: 1fr 2fr;">
+                                <div class="form-group">
+                                    <label for="editTaskIdDisplay">任务ID</label>
+                                    <input type="text" id="editTaskIdDisplay" name="task_id_display" class="form-control" readonly>
+                                </div>
                                 <div class="form-group">
                                     <label for="editTaskName">任务名称</label>
                                     <input type="text" id="editTaskName" name="task_name" class="form-control" required>
                                 </div>
                             </div>
+                            
+                            <input type="hidden" id="editTaskId" name="task_id">
                             
                             <div class="form-group">
                                 <label for="editTaskDesc">任务描述</label>
@@ -518,21 +440,25 @@
                                     <input type="number" id="editTaskTimeout" name="task_timeout" class="form-control">
                                 </div>
                                 <div class="form-group">
-                                    <label for="editTaskRetry">重试次数</label>
-                                    <input type="number" id="editTaskRetry" name="task_retry" class="form-control">
+                                    <label for="editTaskRetryCombined">重试策略 (次数/间隔秒)</label>
+                                    <input type="text" id="editTaskRetryCombined" name="task_retry_combined" class="form-control" placeholder="例如: 3/60">
                                 </div>
                             </div>
                             
                             <div class="form-row">
                                 <div class="form-group">
-                                    <label for="editTaskRetryInterval">重试间隔（秒）</label>
-                                    <input type="number" id="editTaskRetryInterval" name="task_retry_interval"
-                                        class="form-control">
-                                </div>
-                                <div class="form-group">
                                     <label for="editTaskLog">日志文件路径</label>
                                     <input type="text" id="editTaskLog" name="task_log" class="form-control">
                                 </div>
+                            </div>
+
+                            <!-- 环境变量 -->
+                            <div class="form-group">
+                                <label>环境变量 (可选)</label>
+                                <div id="editTaskEnvVarsContainer">
+                                    <!-- 动态添加的环境变量将显示在这里 -->
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="addEnvVar('edit')">添加环境变量</button>
                             </div>
                             
                             <!-- 保持任务启用状态不变 -->

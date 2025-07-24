@@ -11,9 +11,9 @@ const Scheduler = {
         
         if (showLoading) {
             taskList.innerHTML = `
-                <div class="text-center">
+                <div class="loading-container">
                     <div class="spinner"></div>
-                    <p>加载中...</p>
+                    <p>正在加载任务列表...</p>
                 </div>
             `;
         }
@@ -44,40 +44,104 @@ const Scheduler = {
         if (!taskList) return;
         
         if (tasks.length === 0) {
-            taskList.innerHTML = '<div class="text-center text-muted">暂无任务</div>';
+            taskList.innerHTML = `
+                <div class="text-center text-muted">
+                    <div style="font-size: 3rem; margin-bottom: 16px;">📋</div>
+                    <div>暂无任务</div>
+                    <div style="font-size: 0.9rem; margin-top: 8px; color: #868e96;">点击"新建任务"按钮创建您的第一个任务</div>
+                </div>
+            `;
             return;
         }
+
+        // 计算任务统计信息
+        const enabledCount = tasks.filter(task => task.task_enabled).length;
+        const disabledCount = tasks.length - enabledCount;
+        
+        // 添加统计信息
+        const statsHtml = `
+            <div class="task-stats">
+                <div class="stats-item">
+                    <span class="stats-number">${tasks.length}</span>
+                    <span class="stats-label">总任务</span>
+                </div>
+                <div class="stats-item">
+                    <span class="stats-number stats-enabled">${enabledCount}</span>
+                    <span class="stats-label">已启用</span>
+                </div>
+                <div class="stats-item">
+                    <span class="stats-number stats-disabled">${disabledCount}</span>
+                    <span class="stats-label">已禁用</span>
+                </div>
+            </div>
+        `;
 
         const html = tasks.map(task => {
             const isEnabled = task.task_enabled;
             const statusClass = isEnabled ? 'task-enabled' : 'task-disabled';
+            const statusText = isEnabled ? '已启用' : '已禁用';
+            const statusBadgeClass = isEnabled ? 'badge-success' : 'badge-secondary';
+            const nextRunTime = task.next_run_time ? new Date(task.next_run_time).toLocaleString('zh-CN', { 
+                year: 'numeric', 
+                month: '2-digit', 
+                day: '2-digit', 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit' 
+            }).replace(/\//g, '-') : '无定时执行计划';
 
             return `
-            <div class="new-task-item ${statusClass}">
-                <div class="task-info-container" onclick="LogsManager.viewNewLogs('${task.task_id}', '${task.task_name}')">
-                    <div class="task-primary-info">
-                        <div class="task-name" title="${task.task_name}">${task.task_name}</div>
-                        <div class="task-schedule-cron">${task.task_schedule}</div>
+            <div class="new-task-item ${statusClass}" data-task-id="${task.task_id}" onclick="Scheduler.selectTask('${task.task_id}'); LogsManager.viewNewLogs('${task.task_id}', '${task.task_name}')">
+                <div class="task-first-row">
+                    <div class="task-name-section">
+                        <span class="task-name" title="${task.task_name}">${task.task_name}-${task.task_id}</span>
                     </div>
-                    <div class="task-description-small" title="${task.task_desc || '无描述'}">${task.task_desc || '无描述'}</div>
-                    <div class="task-next-run">
-                        <strong>下次执行:</strong> ${task.next_run_time ? new Date(task.next_run_time).toLocaleString() : 'N/A'}
+                    <div class="task-time-section">
+                        <span class="task-next-run-label">下次执行时间：${nextRunTime}</span>
+                    </div>
+                    <div class="task-cron-section">
+                        <div class="task-schedule-cron" title="CRON表达式: ${task.task_schedule}">${task.task_schedule}</div>
                     </div>
                 </div>
-                <div class="task-actions-panel" onclick="event.stopPropagation();">
-                    <button class="btn btn-sm btn-success" onclick="window.Scheduler.executeNewTask('${task.task_id}')">运行一次</button>
-                    ${isEnabled
-                        ? `<button class="btn btn-sm btn-warning" onclick="window.Scheduler.toggleNewTask('${task.task_id}', false)">禁用</button>`
-                        : `<button class="btn btn-sm btn-success" onclick="window.Scheduler.toggleNewTask('${task.task_id}', true)">启用</button>`
-                    }
-                    <button class="btn btn-sm btn-secondary" onclick="window.Scheduler.showTaskDetails('${task.task_id}')">详情</button>
-                    <button class="btn btn-sm btn-warning" onclick="window.Scheduler.openEditModal('${task.task_id}')">编辑</button>
-                    <button class="btn btn-sm btn-danger" onclick="window.Scheduler.deleteNewTask('${task.task_id}')">删除</button>
+                <div class="task-second-row">
+                    <div class="task-status-section">
+                        <span class="task-status-badge ${statusBadgeClass}">${statusText}</span>
+                    </div>
+                    <div class="task-description-section">
+                        <span class="task-description-small" title="${task.task_desc || '无描述'}">${task.task_desc || '无描述'}</span>
+                    </div>
+                    <div class="task-actions-section" onclick="event.stopPropagation();">
+                        <button class="btn btn-sm btn-success" onclick="window.Scheduler.executeNewTask('${task.task_id}')" title="立即执行一次">
+                            <i class="icon-play"></i> 运行
+                        </button>
+                        ${isEnabled
+                            ? `<button class="btn btn-sm btn-warning" onclick="window.Scheduler.toggleNewTask('${task.task_id}', false)" title="禁用任务">
+                                <i class="icon-pause"></i> 禁用
+                               </button>`
+                            : `<button class="btn btn-sm btn-success" onclick="window.Scheduler.toggleNewTask('${task.task_id}', true)" title="启用任务">
+                                <i class="icon-play"></i> 启用
+                               </button>`
+                        }
+                        <button class="btn btn-sm btn-secondary" onclick="window.Scheduler.showTaskDetails('${task.task_id}')" title="查看详情">
+                            <i class="icon-info"></i> 详情
+                        </button>
+                        <button class="btn btn-sm btn-warning" onclick="window.Scheduler.openEditModal('${task.task_id}')" title="编辑任务">
+                            <i class="icon-edit"></i> 编辑
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="window.Scheduler.deleteNewTask('${task.task_id}')" title="删除任务">
+                            <i class="icon-delete"></i> 删除
+                        </button>
+                    </div>
                 </div>
             </div>
         `}).join('');
 
-        taskList.innerHTML = html;
+        taskList.innerHTML = statsHtml + html;
+        
+        // 清除所有激活状态，避免默认激活第一项
+        document.querySelectorAll('.new-task-item').forEach(item => {
+            item.classList.remove('task-active');
+        });
     },
 
     // 创建新版任务
@@ -127,7 +191,7 @@ const Scheduler = {
             task_retry_interval: parseInt(formData.get('task_retry_interval')) || 60,
             task_enabled: false, // 默认禁用状态
             task_log: logPath,
-            task_env: {},
+            task_env: getEnvVars('create'), // 从UI收集环境变量
             task_dependencies: [],
             task_notify: {}
         };
@@ -448,22 +512,31 @@ const Scheduler = {
                 // 填充表单的所有字段，确保不遗漏任何配置
                 const fields = {
                     'task_id': task.task_id,
+                    'task_id_display': task.task_id,
                     'task_name': task.task_name,
                     'task_schedule': task.task_schedule,
                     'task_exec': task.task_exec,
                     'script_type': scriptType,
                     'task_desc': task.task_desc || '',
                     'task_timeout': task.task_timeout || 10, // 默认10秒
-                    'task_retry': task.task_retry || 0,
-                    'task_retry_interval': task.task_retry_interval || 60,
                     'task_log': task.task_log || `logs/task_${task.task_id}.log`,
-                    'task_enabled': task.task_enabled.toString()
+                    'task_enabled': task.task_enabled.toString(),
+                    'task_retry_combined': `${task.task_retry || 0}/${task.task_retry_interval || 0}`
                 };
                 
                 for (const [fieldName, value] of Object.entries(fields)) {
                     const field = form[fieldName];
                     if (field) {
                         field.value = value;
+                    }
+                }
+
+                // 填充环境变量
+                const envVarsContainer = document.getElementById('editTaskEnvVarsContainer');
+                envVarsContainer.innerHTML = ''; // 清空旧的
+                if (task.task_env) {
+                    for (const [key, value] of Object.entries(task.task_env)) {
+                        addEnvVar('edit', key, value);
                     }
                 }
             }
@@ -509,6 +582,10 @@ const Scheduler = {
             }
             
             const originalTask = response.data;
+
+            // 解析重试策略
+            const retryCombined = form.task_retry_combined.value || '0/0';
+            const [retry, retryInterval] = retryCombined.split('/').map(s => parseInt(s.trim(), 10));
             
             // 创建更新数据，只更新表单中的字段，保留其他字段的原始值
             const taskData = {
@@ -519,11 +596,11 @@ const Scheduler = {
                 task_desc: form.task_desc.value,
                 task_enabled: form.task_enabled.value === 'true',
                 task_timeout: parseInt(form.task_timeout.value) || 10,
-                task_retry: parseInt(form.task_retry.value) || 0,
-                task_retry_interval: parseInt(form.task_retry_interval.value) || 60,
+                task_retry: !isNaN(retry) ? retry : 0,
+                task_retry_interval: !isNaN(retryInterval) ? retryInterval : 0,
                 task_log: form.task_log.value,
+                task_env: getEnvVars('edit'), // 从UI收集环境变量
                 // 保留原始值
-                task_env: originalTask.task_env || {},
                 task_dependencies: originalTask.task_dependencies || [],
                 task_notify: originalTask.task_notify || {}
             };
@@ -562,8 +639,51 @@ const Scheduler = {
                 submitBtn.innerHTML = '保存更改';
             }
         }
+    },
+
+    // 选择任务（激活状态）
+    selectTask(taskId) {
+        // 移除所有任务的激活状态
+        document.querySelectorAll('.new-task-item').forEach(item => {
+            item.classList.remove('task-active');
+        });
+        
+        // 为当前任务添加激活状态
+        const currentTask = document.querySelector(`[data-task-id="${taskId}"]`);
+        if (currentTask) {
+            currentTask.classList.add('task-active');
+        }
     }
 };
 
 // 导出新版调度器
 window.Scheduler = Scheduler;
+
+// 动态添加环境变量输入行
+function addEnvVar(type, key = '', value = '') {
+    const containerId = type === 'create' ? 'createTaskEnvVarsContainer' : 'editTaskEnvVarsContainer';
+    const container = document.getElementById(containerId);
+    const div = document.createElement('div');
+    div.className = 'env-var-row';
+    div.innerHTML = `
+        <input type="text" class="form-control env-var-key" placeholder="KEY" value="${key}">
+        <input type="text" class="form-control env-var-value" placeholder="VALUE" value="${value}">
+        <button type="button" class="btn btn-sm btn-danger" onclick="this.parentElement.remove()">删除</button>
+    `;
+    container.appendChild(div);
+}
+
+// 从UI收集环境变量
+function getEnvVars(type) {
+    const containerId = type === 'create' ? 'createTaskEnvVarsContainer' : 'editTaskEnvVarsContainer';
+    const container = document.getElementById(containerId);
+    const envVars = {};
+    container.querySelectorAll('.env-var-row').forEach(row => {
+        const key = row.querySelector('.env-var-key').value.trim();
+        const value = row.querySelector('.env-var-value').value.trim();
+        if (key) {
+            envVars[key] = value;
+        }
+    });
+    return envVars;
+}

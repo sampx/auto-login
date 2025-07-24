@@ -10,7 +10,7 @@
   "task_enabled": true,
   "task_log": "logs/task_claude_endpoint_check.log",
   "task_env": {
-    "_ENV_FILE": "env/qwcoder.zrc"
+    "_ENV_FILE": "env/anyrouter.zrc"
   },
   "task_dependencies": [],
   "task_notify": {}

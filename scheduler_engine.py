@@ -18,6 +18,7 @@ from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from dotenv import dotenv_values
 import glob
+from logger_helper import setup_logging
 
 @dataclass
 class Task:
@@ -126,7 +127,6 @@ class TaskLoader:
         """从任务目录加载所有任务"""
         if not os.path.exists(self.tasks_dir):
             raise FileNotFoundError(f"任务目录 {self.tasks_dir} 不存在，请检查配置或联系管理员")
-        return []
             
         tasks = []
         try:
@@ -324,20 +324,44 @@ class TaskExecutor:
         env_file_path = task_env_config.get("_ENV_FILE")
         
         if env_file_path:
+            # 获取项目根目录路径（scheduler_engine.py 所在目录）
+            project_root = os.path.dirname(os.path.abspath(__file__))
+            # 将 env_file_path 解析为相对于项目根目录的绝对路径
+            absolute_env_file_path = os.path.join(project_root, env_file_path)
+            
             self.logger.info(f"任务 {task.task_id} 指定了环境文件: {env_file_path}")
-            if os.path.exists(env_file_path):
+            self.logger.debug(f"解析后的环境文件绝对路径: {absolute_env_file_path}")
+            
+            if os.path.exists(absolute_env_file_path):
                 try:
-                    env.update(dotenv_values(env_file_path))
-                    self.logger.info(f"成功从 {env_file_path} 加载环境变量")
+                    # 过滤掉值为 None 的环境变量
+                    env_vars = {k: v for k, v in dotenv_values(absolute_env_file_path).items() if v is not None}
+                    env.update(env_vars)
+                    self.logger.info(f"成功从 {absolute_env_file_path} 加载环境变量")
                 except Exception as e:
-                    self.logger.error(f"加载环境文件 {env_file_path} 失败: {e}")
+                    self.logger.error(f"加载环境文件 {absolute_env_file_path} 失败: {e}")
             else:
-                self.logger.warning(f"环境文件 {env_file_path} 不存在，已跳过")
+                # 如果绝对路径不存在，尝试使用原始相对路径（向后兼容）
+                if os.path.exists(env_file_path):
+                    try:
+                        # 过滤掉值为 None 的环境变量
+                        env_vars = {k: v for k, v in dotenv_values(env_file_path).items() if v is not None}
+                        env.update(env_vars)
+                        self.logger.info(f"成功从 {env_file_path} 加载环境变量（使用原始路径）")
+                    except Exception as e:
+                        self.logger.error(f"加载环境文件 {env_file_path} 失败: {e}")
+                else:
+                    self.logger.warning(f"环境文件 {env_file_path} 不存在，已跳过")
+        else:
+            self.logger.debug(f"任务 {task.task_id} 未指定环境文件")
 
-        env.update(task_env_config)
+        # 过滤掉值为 None 的环境变量
+        filtered_task_env = {k: v for k, v in task_env_config.items() if v is not None and not k.startswith('_')}
+        env.update(filtered_task_env)
         env['TASK_ID'] = task.task_id
         env['TASK_LOG'] = task.task_log
         
+        # 移除以 _ 开头的内部配置项
         return {k: v for k, v in env.items() if not k.startswith('_')}
 
     def _prepare_command(self, task_exec: str) -> tuple:
@@ -523,8 +547,12 @@ class SchedulerEngine:
     def start(self):
         """启动调度引擎"""
         self.logger.info("正在启动任务调度引擎...")
-        tasks = self.task_loader.load_tasks()
-        self.logger.info(f"成功加载 {len(tasks)} 个任务")
+        try:
+            tasks = self.task_loader.load_tasks()
+            self.logger.info(f"成功加载 {len(tasks)} 个任务")
+        except FileNotFoundError as e:
+            self.logger.error(str(e))
+            raise
         
         for task in tasks:
             if task.task_enabled:
