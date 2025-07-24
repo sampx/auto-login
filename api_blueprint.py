@@ -440,6 +440,9 @@ def create_task():
                 
             logger.info(f"API接口: 成功创建任务配置文件 {config_path}")
             
+            # 标记API操作，避免文件监控误触发
+            engine._mark_api_operation()
+            
             # 添加任务到调度引擎
             if engine.add_task(task):
                 logger.info(f"任务创建成功: {task.task_id}")
@@ -561,6 +564,9 @@ def update_task(task_id):
                 logger.warning(f"API接口: 无效的重试间隔: {existing_task.task_retry_interval}")
                 return jsonify({"success": False, "message": "重试间隔必须大于0"}), 400
             
+            # 标记API操作，避免文件监控误触发
+            engine._mark_api_operation()
+            
             # 更新配置文件
             config_path = os.path.join(task_dir, "config.json")
             try:
@@ -604,6 +610,8 @@ def toggle_task_enabled(task_id):
         data = request.get_json()
         enabled = data.get('enabled', True)
         engine = validate_scheduler_engine()
+        # 标记API操作，避免文件监控误触发
+        engine._mark_api_operation()
         if engine.toggle_task(task_id, enabled):
             logger.info(f"API接口: 任务 {task_id} 已切换为 {'启用' if enabled else '禁用'} 状态")
             return jsonify({"success": True, "message": f"任务已{'启用' if enabled else '禁用'}"})
@@ -708,6 +716,9 @@ def delete_task(task_id):
         return jsonify({"success": False, "message": "任务不存在"}), 404
 
     try:
+        # 标记API操作，避免文件监控误触发
+        engine._mark_api_operation()
+        
         with DeleteTaskTransactionManager(task_id, task):
             # 1. 从调度引擎中移除任务
             if not engine.remove_task(task_id):

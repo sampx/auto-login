@@ -1,0 +1,32 @@
+services:
+  auto-login:
+    build: 
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: auto-login
+    ports:
+      - "5001:5001"
+    volumes:
+      - ../.env:/app/.env
+      - ../logs:/app/logs
+      - ../tasks:/app/tasks
+      - ../tools:/app/tools
+      - ../env:/app/env
+    environment:
+      - TASK_CONFIG_MONITOR_TYPE=polling
+      - TASK_CONFIG_POLLING_INTERVAL=10  # 增加轮询间隔以减少误报
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+    # 优化文件系统性能
+    tmpfs:
+      - /tmp
+    # 确保挂载卷的正确行为
+    security_opt:
+      - no-new-privileges:true
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M

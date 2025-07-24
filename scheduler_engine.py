@@ -663,55 +663,109 @@ class SchedulerEngine:
         tasks_dir = self.task_loader.tasks_dir
         self.logger.info(f"轮询监控线程已启动，监控目录: {tasks_dir}，轮询间隔: {self.polling_interval}秒")
         
+        # 增加稳定性和容错性的参数
+        max_retries = 3
+        retry_count = 0
+        
         while not self.polling_stop_event.is_set():
             try:
+                # 检查目录是否存在，处理Docker挂载的临时不可见问题
+                if not os.path.exists(tasks_dir):
+                    self.logger.warning(f"任务目录 {tasks_dir} 暂时不可见，可能是Docker挂载延迟，将重试...")
+                    retry_count += 1
+                    if retry_count >= max_retries:
+                        self.logger.error(f"任务目录 {tasks_dir} 持续不可见，可能存在问题")
+                        retry_count = 0
+                    self.polling_stop_event.wait(1)  # 短暂等待后重试
+                    continue
+                
+                retry_count = 0  # 重置重试计数
+                
                 # 查找所有 config.json 文件
                 pattern = os.path.join(tasks_dir, "*", "config.json")
-                config_files = glob.glob(pattern)
+                config_files = []
+                
+                # 使用更稳健的文件查找方式
+                try:
+                    config_files = glob.glob(pattern)
+                except Exception as e:
+                    self.logger.warning(f"查找配置文件时发生异常: {e}")
+                    self.polling_stop_event.wait(1)
+                    continue
                 
                 current_modtimes = {}
+                current_files = set()
+                
                 for config_file in config_files:
                     try:
-                        mod_time = os.path.getmtime(config_file)
-                        current_modtimes[config_file] = mod_time
-                    except OSError:
-                        # 文件可能已被删除
-                        pass
+                        # 验证文件实际存在且可读
+                        if os.path.isfile(config_file) and os.access(config_file, os.R_OK):
+                            mod_time = os.path.getmtime(config_file)
+                            current_modtimes[config_file] = mod_time
+                            current_files.add(config_file)
+                        else:
+                            self.logger.debug(f"配置文件暂不可读: {config_file}")
+                    except (OSError, IOError) as e:
+                        # 记录但忽略单个文件的访问错误
+                        self.logger.debug(f"访问文件 {config_file} 时出错: {e}")
+                        continue
                 
-                # 检查是否有文件变更
+                # 检查是否有文件变更，使用更精确的判断逻辑
                 changed_files = []
-                for file_path, mod_time in current_modtimes.items():
-                    if file_path not in self.last_file_modtimes or self.last_file_modtimes[file_path] != mod_time:
+                deleted_files = []
+                
+                # 处理文件变更检测
+                for file_path in current_files:
+                    if file_path in self.last_file_modtimes:
+                        time_diff = abs(current_modtimes[file_path] - self.last_file_modtimes[file_path])
+                        # 只有当时间差大于0.1秒时才认为是真正的变更，避免Docker时间精度问题
+                        if time_diff > 0.1:
+                            changed_files.append(file_path)
+                    else:
+                        # 新发现的文件
                         changed_files.append(file_path)
                 
-                # 检查是否有文件被删除
-                deleted_files = []
-                for file_path in self.last_file_modtimes:
-                    if file_path not in current_modtimes:
-                        deleted_files.append(file_path)
+                # 处理文件删除检测，增加延迟确认机制
+                for file_path in list(self.last_file_modtimes.keys()):
+                    if file_path not in current_files:
+                        # 延迟确认，避免Docker挂载延迟导致的误判
+                        time.sleep(0.2)
+                        if not os.path.exists(file_path):
+                            deleted_files.append(file_path)
+                        else:
+                            self.logger.debug(f"文件 {file_path} 重新出现，忽略之前的不可见状态")
                 
-                # 如果有变更或删除，则重新加载任务
-                if changed_files or deleted_files:
+                # 只有当确实有变更时才触发重载，且避免API操作触发的重载
+                if (changed_files or deleted_files) and not self._is_api_operation_recent():
                     if changed_files:
                         self.logger.info(f"检测到任务配置变更: {len(changed_files)} 个文件")
                         self.logger.debug(f"变更文件列表: {changed_files}")
-                        # 重新加载变更的单个任务
+                        # 逐个验证文件有效性后再重载
                         for changed_file in changed_files:
-                            self._reload_single_task(changed_file)
+                            if os.path.exists(changed_file) and os.path.getsize(changed_file) > 0:
+                                self._reload_single_task(changed_file)
+                            else:
+                                self.logger.warning(f"跳过无效的配置文件: {changed_file}")
+                    
                     if deleted_files:
-                        self.logger.info(f"检测到配置文件删除: {deleted_files}")
-                        # 重新加载所有任务以处理删除的文件
-                        self._reload_all_tasks()
+                        self.logger.info(f"检测到配置文件删除: {len(deleted_files)} 个文件")
+                        # 只有当删除的文件数量超过当前文件的10%时才全量重载
+                        deletion_ratio = len(deleted_files) / max(len(current_files), 1)
+                        if deletion_ratio > 0.1:
+                            self._reload_all_tasks()
+                        else:
+                            self.logger.debug(f"删除文件比例较低({deletion_ratio:.1%})，跳过全量重载")
                 
                 # 更新最后修改时间记录
-                self.last_file_modtimes = current_modtimes
+                self.last_file_modtimes = current_modtimes.copy()
                 
                 # 等待下一个轮询周期
                 self.polling_stop_event.wait(self.polling_interval)
+                
             except Exception as e:
                 self.logger.error(f"轮询监控过程中发生异常: {e}")
-                # 发生异常时也等待一段时间再继续
-                self.polling_stop_event.wait(self.polling_interval)
+                # 发生异常时增加等待时间，避免频繁重试
+                self.polling_stop_event.wait(min(self.polling_interval * 2, 30))
         
         self.logger.info("轮询监控线程已停止")
         
@@ -741,7 +795,8 @@ class SchedulerEngine:
     def _is_api_operation_recent(self) -> bool:
         """检查文件变更是否由最近的API操作触发"""
         with self.api_operation_lock:
-            return (time.time() - self.api_operation_timestamp) < 2
+            # 延长API操作保护时间，考虑Docker挂载延迟
+            return (time.time() - self.api_operation_timestamp) < 5
     
     def _reload_single_task(self, config_file_path: str):
         """重新加载单个任务配置"""
