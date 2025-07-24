@@ -5,7 +5,7 @@
   "task_schedule": "0 */3 * * *",
   "task_desc": "检测 claude api 可用性",
   "task_timeout": 10,
-  "task_retry": 2,
+  "task_retry": 3,
   "task_retry_interval": 5,
   "task_enabled": true,
   "task_log": "logs/task_claude_endpoint_check.log",

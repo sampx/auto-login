@@ -1,34 +1,37 @@
-# AGENT.md
+# CLAUDE.md
 
-This file provides guidance to AI agent when working with code in this repository.
+This file provides guidance to AI agents when working with code in this repository.
 
 ## Project Overview
 
-Automated Login System that performs scheduled website logins with email notifications. Built with Python, Flask web interface, and Playwright browser automation. The system has been refactored to use a unified, modern task scheduling engine.
+Web Task Scheduler - A modern, unified task scheduling and automation system with a web-based management interface. Built with Python, Flask web interface, and modular JavaScript frontend. The system provides comprehensive task management capabilities through an intuitive web UI.
 
 ## Architecture
 
 **Core Components:**
-- `app.py` - The unified Flask web server, serving the task management UI and APIs.
-- `api_blueprint.py` - Blueprint for the scheduler API (`/api/scheduler/tasks/*`) and other core APIs like configuration and logging.
-- `scheduler_engine.py` - Generic task scheduling engine for cron-based tasks.
-- `browser_handler.py` - Playwright-based browser automation.
-- `email_notifier.py` - Email notification system (success/failure alerts).
+- `app.py` - The unified Flask web server, serving the task management UI and APIs
+- `api_blueprint.py` - Modern scheduler API blueprint (`/api/scheduler/tasks/*`) and system APIs
+- `scheduler_engine.py` - Generic task scheduling engine with cron-based scheduling and file monitoring
+- `browser_handler.py` - Playwright-based browser automation for web tasks
+- `email_notifier.py` - Email notification system for task alerts
+- `logger_helper.py` - Centralized logging configuration and management
 
 **Service Architecture:**
-- **Web Layer**: A single Flask REST API + Static frontend (port 5001) serving all endpoints.
-- **Process Layer**: Subprocess management with signal handling and process groups.
-- **Automation Layer**: Playwright browser automation (headless Chromium).
-- **Scheduling Layer**: APScheduler for cron/interval triggers.
-- **Notification Layer**: SMTP email alerts.
+- **Web Layer**: Single Flask REST API + Modular frontend architecture (port 5001)
+- **Process Layer**: Subprocess management with signal handling and process groups
+- **Automation Layer**: Playwright browser automation (headless Chromium)
+- **Scheduling Layer**: APScheduler for cron/interval triggers with configuration file monitoring
+- **Notification Layer**: SMTP email alerts
+- **Frontend Layer**: Modular JavaScript with state management and API abstraction
 
 ## Development Commands
 
-### Docker Setup
+### Docker Setup (Recommended)
 ```bash
 # Build and run
-./docker/build.sh             # Build Docker image
-./docker/start_docker.sh      # Start the Docker container (runs web app)
+cd docker
+./build.sh                   # Build Docker image
+./start_docker.sh            # Start the Docker container (runs web app)
 ```
 
 ### Local Development
@@ -38,31 +41,50 @@ pip install -r requirements.txt
 
 # Set environment variables
 cp .env.example .env
-# Edit .env with your credentials
+# Edit .env with your configuration
 
-# Run services
-python app.py                # Unified Web UI (http://localhost:5001)
-python scheduler_engine.py   # Generic task scheduler (can be run standalone for testing)
+# Run the web application
+./start_web_app.sh           # Start unified web interface (http://localhost:5001)
+# OR
+python app.py                # Direct Python execution
 
 # Test components
-python -m pytest test_*.py   # Run tests
-python test_email_notifier.py # Test email notifications
+python -m pytest tests/      # Run all tests
+python tests/test_scheduler.py # Test scheduler functionality
+python tests/test_email_notifier.py # Test email notifications
+```
+
+### Task Development
+```bash
+# Task files are organized in tasks/ directory
+# Each task has its own subdirectory with:
+# - config.json (task configuration)
+# - {task_id}.py or {task_id}.sh (task script)
+# - Optional README.md (task documentation)
+
+# Example task structure:
+# tasks/
+# ├── my-python-task/
+# │   ├── config.json
+# │   └── my-python-task.py
+# └── my-shell-task/
+#     ├── config.json
+#     └── my-shell-task.sh
 ```
 
 ### Configuration
 
 **Environment Variables (.env):**
-- `WEBSITE_URL` - Target login URL
-- `USERNAME`, `PASSWORD` - Login credentials
-- `EMAIL_SENDER`, `EMAIL_PASSWORD`, `EMAIL_RECIPIENT` - SMTP settings
+- `WEB_PORT` - Web server port (default: 5001)
+- `LOG_LEVEL` - Logging level (DEBUG, INFO, WARNING, ERROR)
+- `TASK_CONFIG_MONITOR_TYPE` - File monitoring type (watchdog, polling)
+- `TASK_CONFIG_POLLING_INTERVAL` - Polling interval in seconds (default: 10)
+- `EMAIL_SENDER`, `EMAIL_PASSWORD`, `EMAIL_RECIPIENT` - SMTP settings for notifications
 - `SMTP_SERVER`, `SMTP_PORT` - SMTP configuration
-- `LOGIN_SCHEDULE_TYPE` - 'monthly' or 'minutes'
-- `LOGIN_SCHEDULE_DATE`, `LOGIN_SCHEDULE_TIME` - Cron schedule
-- `MAX_RETRIES` - Retry attempts (1-10)
 
 **Log Locations:**
 - `logs/sys.log` - System logs
-- `logs/task_*.log` - Task execution logs, where * is the task_id.
+- `logs/task_{task_id}.log` - Individual task execution logs
 
 ## API Endpoints
 
@@ -98,6 +120,48 @@ python test_email_notifier.py # Test email notifications
 - Process isolation via subprocess + signal handling.
 - Environment variable validation on startup.
 
-## Web Interface Notes
+## Web Interface
 
-- 记住, 本项目web界面现在是一个统一的、现代化的任务调度管理界面, 代码位于 `web/templates/index.html` 和 `web/static/js/` 目录下。
+The project features a modern, unified task scheduling management interface:
+
+**Frontend Structure:**
+- **Template**: `web/templates/index.html` - Single-page application
+- **Styles**: `web/static/css/main.css` - Modern CSS styling
+- **JavaScript**: Modular architecture in `web/static/js/`
+  - **Core modules**: State management, API handling, utilities, UI operations
+  - **Feature modules**: Task scheduler, log management
+  - **Main entry**: Coordinated initialization and event handling
+
+**Key Features:**
+- Real-time task status monitoring
+- Live log viewing with auto-refresh
+- Task creation wizard with validation
+- Cron expression validation
+- Environment variable management
+- Responsive design for desktop and mobile
+
+**Usage:**
+1. Access the web interface at http://localhost:5001
+2. Create tasks using the "新建任务" (New Task) button
+3. Monitor task execution through the log viewer
+4. Manage tasks with enable/disable, edit, and delete operations
+
+## Development Guidelines
+
+**Code Organization:**
+- Follow modular architecture principles
+- Separate concerns between frontend and backend
+- Use transaction management for data integrity
+- Implement proper error handling and logging
+
+**Task Development:**
+- Each task should be self-contained in its directory
+- Include proper logging and error handling
+- Use environment variables for configuration
+- Follow the established naming conventions
+
+**API Development:**
+- Follow RESTful principles
+- Include proper input validation
+- Use consistent error response format
+- Implement request deduplication where needed

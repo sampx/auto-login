@@ -2,34 +2,32 @@
 inclusion: always
 ---
 
-# Scheduled Automation Aystem
+# Scheduled Automation System
 
-A scheduled automation system for all kinds of tasks.
+A modern, unified task scheduling and automation system for all kinds of tasks.
 
 ## Core Architecture
 
 **Unified Web Server:**
-- **`app.py`** - Main Flask web server serving both old and new task management UIs and APIs (port 5001)
-- **`legacy_api_blueprint.py`** - Blueprint for old task management API (`/api/tasks/*`) - LEGACY, avoid modifications
-- **`api_blueprint.py`** - Blueprint for new scheduler API (`/api/scheduler/tasks/*`) and core APIs
+- **`app.py`** - Main Flask web server serving the unified task management UI and APIs (port 5001)
+- **`api_blueprint.py`** - Modern scheduler API blueprint (`/api/scheduler/tasks/*`) and core system APIs
 
 **Service Components:**
-- **`auto_login.py`** - Main scheduled login service with APScheduler
-- **`scheduler_engine.py`** - NEW VERSION: Generic task scheduling engine for cron-based tasks
-- **`task_manager.py`** - OLD VERSION: Legacy process management (DO NOT MODIFY)
+- **`scheduler_engine.py`** - Generic task scheduling engine with cron-based scheduling
 - **`browser_handler.py`** - Playwright-based browser automation
 - **`email_notifier.py`** - Email notification system
+- **`logger_helper.py`** - Centralized logging configuration and management
 
 **Frontend Architecture (Modular JavaScript):**
 - **Core Modules**: State management, API handling, utilities, UI operations
-- **Feature Modules**: Logs management, legacy tasks, scheduler functionality
+- **Feature Modules**: Logs management, scheduler functionality
 - **Main Entry**: Coordinated initialization and global event handling
 
 **Service Layers:**
-- **Web Layer**: Single Flask REST API + Modular frontend architecture (port 5001)
-- **Process Layer**: Subprocess management with signal handling
+- **Web Layer**: Single Flask REST API + Modern modular frontend architecture (port 5001)
+- **Process Layer**: Subprocess management with signal handling and process groups
 - **Automation Layer**: Playwright browser automation (headless Chromium)
-- **Scheduling Layer**: APScheduler for cron/interval triggers
+- **Scheduling Layer**: APScheduler for cron/interval triggers with file monitoring
 - **Notification Layer**: SMTP email alerts
 - **Frontend Layer**: Modular JavaScript with state management and API abstraction
 
@@ -54,23 +52,13 @@ A scheduled automation system for all kinds of tasks.
 - Event-driven communication between components
 - Proper resource cleanup in all operations
 
-## Version Management
-
-**CRITICAL RULE: All new features MUST be implemented in NEW VERSION only**
-
-- **OLD VERSION**: `task_manager.py` + `legacy_api_blueprint.py` (DO NOT MODIFY)
-- **NEW VERSION**: `scheduler_engine.py` + `api_blueprint.py` (USE FOR ALL NEW FEATURES)
-- **UI**: Both versions accessible via tabs in `templates/index.html`
-- **APIs**: 
-  - Legacy: `/api/tasks/*` 
-  - New: `/api/scheduler/tasks/*`
-
 ## Development Guidelines
 
-### Version Selection
-- **Never modify OLD VERSION code** (`task_manager.py`, `legacy_api_blueprint.py`)
-- **Always use NEW VERSION** for feature requests (`scheduler_engine.py`, `api_blueprint.py`)
-- Web interface contains two tabs - do not confuse them when making changes
+### Architecture Principles
+- **Unified System**: Single modern architecture using `scheduler_engine.py` + `api_blueprint.py`
+- **Modular Frontend**: Clean separation between core modules and feature modules
+- **Single Web Interface**: Unified task management interface at `web/templates/index.html`
+- **RESTful API**: All endpoints follow `/api/scheduler/tasks/*` pattern
 
 ### Browser Automation
 - Always use Playwright with Chromium

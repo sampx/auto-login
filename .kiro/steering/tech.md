@@ -6,7 +6,7 @@ inclusion: always
 
 ## Core Technologies
 
-- **Python 3.9**: Main programming language
+- **Python 3.12**: Main programming language
 - **Playwright**: Browser automation framework with Chromium
 - **APScheduler**: Task scheduling library for cron-like functionality
 - **Flask**: Web framework for unified web interface
@@ -30,16 +30,13 @@ watchdog==3.0.0           # File system monitoring
 ### Docker Commands
 ```bash
 # Build the Docker image
+cd docker
 ./build.sh
 
-# Run scheduled login service
-./start.sh
+# Run the containerized application
+./start_docker.sh
 
-# Run unified web interface (port 5001)
-./start_web_app.sh
-
-# Run tests
-./test.sh
+# Access web interface at http://localhost:5001
 ```
 
 ### Development Commands
@@ -47,61 +44,56 @@ watchdog==3.0.0           # File system monitoring
 # Install dependencies
 pip install -r requirements.txt
 
-# Install Playwright browsers
+# Install Playwright browsers (if using browser automation)
 playwright install chromium
 playwright install-deps
 
-# Run services
-python auto_login.py         # CLI scheduled service
-python app.py                # Unified Web UI (http://localhost:5001)
-python scheduler_engine.py   # Generic task scheduler (standalone testing)
+# Run the web application
+./start_web_app.sh           # Start web interface (port 5001)
+python app.py                # Direct Python execution
 
 # Test components
-python test_login.py         # Test browser automation
-python test_email_notifier.py # Test email notifications
-python test_scheduler.py     # Test generic task scheduler
-python -m pytest test_*.py   # Run all tests
+python -m pytest tests/      # Run all tests
+python tests/test_scheduler.py # Test scheduler functionality
+python tests/test_email_notifier.py # Test email notifications
 ```
 
 ## Frontend Architecture
 
 ### Modular JavaScript Structure
-- **Total Code Reduction**: From 1779 lines (2 files) to 1660 lines (8 modular files)
+- **Clean Architecture**: Modular design with clear separation of concerns
 - **Zero Function Duplication**: Eliminated all duplicate function definitions
 - **Unified State Management**: Centralized global variable management
-- **Backward Compatibility**: 100% compatible with existing HTML onclick handlers
+- **Modern UI/UX**: Responsive design with real-time updates
 
-### Core Modules (`static/js/core/`)
+### Core Modules (`web/static/js/core/`)
 - **StateManager** (`state.js`): Global state and timer management
 - **APIManager** (`api.js`): Unified API requests with auto-reconnection
 - **Utils** (`utils.js`): Common utilities and helper functions
 - **UIManager** (`ui.js`): UI operations, modals, and messaging
 
-### Feature Modules (`static/js/modules/`)
-- **LogsManager** (`logs.js`): Log viewing and management for both versions
-- **LegacyTasks** (`legacy-tasks.js`): Old version task management
-- **Scheduler** (`scheduler.js`): New version task scheduling with CRUD operations
+### Feature Modules (`web/static/js/modules/`)
+- **LogsManager** (`logs.js`): Real-time log viewing and management
+- **Scheduler** (`scheduler.js`): Task scheduling with full CRUD operations
 
 ## API Endpoints
 
-### Legacy API (DO NOT MODIFY)
-- `GET /api/tasks` - List all tasks
-- `GET /api/tasks/<id>` - Get task details
-- `POST /api/tasks/<id>/start` - Start task
-- `POST /api/tasks/<id>/stop` - Stop task
-- `GET /api/tasks/<id>/status` - Get task status
-
-### New Scheduler API (USE FOR NEW FEATURES)
-- `GET /api/scheduler/tasks` - List scheduler tasks
+### Task Management API
+- `GET /api/scheduler/tasks` - List all tasks
 - `POST /api/scheduler/tasks` - Create new task
 - `GET /api/scheduler/tasks/<id>` - Get task details
 - `PUT /api/scheduler/tasks/<id>` - Update task
 - `DELETE /api/scheduler/tasks/<id>` - Delete task
+- `POST /api/scheduler/tasks/<id>/toggle` - Enable/disable task
+- `POST /api/scheduler/tasks/<id>/execute` - Execute task manually
+- `POST /api/scheduler/tasks/<id>/run-once` - Run task once immediately
+- `GET /api/scheduler/tasks/<id>/logs` - Get task logs
+- `POST /api/scheduler/tasks/<id>/logs/clear` - Clear task logs
 
-### Configuration & Logging
-- `GET /api/config` - Get current config
-- `POST /api/config` - Update configuration
-- `GET /api/logs/<task_id>` - Get task logs
+### System Configuration API
+- `GET /api/config` - Get current system configuration
+- `POST /api/config` - Update system configuration
+- `POST /api/scheduler/validate-cron` - Validate cron expression
 
 ## Environment Configuration
 
@@ -119,10 +111,11 @@ python -m pytest test_*.py   # Run all tests
 
 ## Docker Configuration
 
-- Base image: `python:3.9-slim`
+- Base image: `python:3.12-slim`
 - Timezone: `Asia/Shanghai`
 - Headless browser setup with required dependencies
-- Volume mounting for configuration files
-- Default startup changed to web interface
+- Volume mounting for configuration files and persistent data
+- Web interface startup as default entry point
 - Port 5001 exposed for web interface access
-- Persistent storage for logs and configuration
+- Persistent storage for logs, tasks, and configuration
+- Environment variable support for configuration

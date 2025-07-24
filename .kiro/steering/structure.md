@@ -8,30 +8,25 @@ inclusion: always
 
 ```
 ├── app.py                  # Unified Flask web server (port 5001)
-├── api_blueprint.py        # NEW VERSION: Scheduler API blueprint
-├── legacy_api_blueprint.py # OLD VERSION: Legacy task API (DO NOT MODIFY)
-├── auto_login.py           # Main scheduled login service
-├── scheduler_engine.py     # NEW VERSION: Generic task scheduling engine
-├── task_manager.py         # OLD VERSION: Legacy task management (DO NOT MODIFY)
+├── api_blueprint.py        # Modern scheduler API blueprint
+├── scheduler_engine.py     # Generic task scheduling engine
 ├── browser_handler.py      # Browser automation logic
 ├── email_notifier.py       # Email notification functionality
 ├── logger_helper.py        # Logging configuration and management
-├── process_manager.py      # Process management functionality
 ├── clear_logs.py           # Log cleanup utility
 ├── requirements.txt        # Python dependencies
-├── start_docker.sh         # Docker container startup script
-├── start_web_app.sh        # Web interface startup
+├── start_web_app.sh        # Web interface startup script
 ├── .env.example            # Environment template
 ├── .env                    # Production config (not in git)
 ├── .gitignore              # Git ignore patterns
 ├── README.md               # Project documentation
 ├── LICENSE                 # License file
 ├── CLAUDE.md               # Claude AI documentation
-├── GEMINI.md               # Gemini AI documentation
-├── .docker/                # Docker configuration directory
+├── docker/                 # Docker configuration directory
 │   ├── Dockerfile          # Container configuration
 │   ├── .dockerignore       # Docker build exclusions
 │   ├── build.sh            # Docker image building script
+│   ├── start_docker.sh     # Docker container startup script
 │   └── docker_entrypoint.sh # Container entry point script
 ├── docs/                   # Project documentation
 │   ├── REFACTOR_SUMMARY.md # JavaScript refactoring summary
@@ -45,22 +40,22 @@ inclusion: always
 │   ├── task_python_task_test.log # Python task test logs
 │   ├── task_shell_task_test.log # Shell task test logs
 │   └── task_test_task.log  # Test task logs
-├── static/                 # Static resource files
-│   ├── css/                # CSS style files
-│   │   └── style.css       # Main stylesheet
-│   └── js/                 # Modular JavaScript architecture
-│       ├── core/           # Core modules
-│       │   ├── state.js    # Global state management
-│       │   ├── api.js      # API requests and connection management
-│       │   ├── utils.js    # Common utility functions
-│       │   └── ui.js       # UI operations and messaging
-│       ├── modules/        # Feature modules
-│       │   ├── logs.js     # Log management functionality
-│       │   ├── legacy-tasks.js # Legacy task management
-│       │   └── scheduler.js # New task scheduler
-│       └── main.js         # Main entry point (80 lines)
-├── templates/              # Flask HTML templates
-│   └── index.html          # Dual-tab UI (old + new versions)
+├── web/                    # Web interface files
+│   ├── static/             # Static resource files
+│   │   ├── css/            # CSS style files
+│   │   │   └── main.css    # Main stylesheet
+│   │   └── js/             # Modular JavaScript architecture
+│   │       ├── core/       # Core modules
+│   │       │   ├── state.js    # Global state management
+│   │       │   ├── api.js      # API requests and connection management
+│   │       │   ├── utils.js    # Common utility functions
+│   │       │   └── ui.js       # UI operations and messaging
+│   │       ├── modules/    # Feature modules
+│   │       │   ├── logs.js     # Log management functionality
+│   │       │   └── scheduler.js # Task scheduler functionality
+│   │       └── main.js     # Main entry point (80 lines)
+│   └── templates/          # Flask HTML templates
+│       └── index.html      # Unified task management UI
 ├── tasks/                  # Task scripts directory
 │   ├── claude_endpoint_check/  # Claude endpoint check task directory
 │   │   ├── config.json         # Task configuration
@@ -107,56 +102,41 @@ inclusion: always
 ## Core Modules
 
 ### Unified Web Server (`app.py`)
-- Main Flask application serving both old and new UIs
-- Registers both legacy and new API blueprints
-- Serves static files and templates
+- Main Flask application serving the unified task management UI
+- Registers the modern scheduler API blueprint
+- Serves static files and templates from `web/` directory
 - Port 5001 for all web services
+- Initializes and manages the scheduler engine
 
-### API Blueprints
-#### New Scheduler API (`api_blueprint.py`) - **USE FOR NEW FEATURES**
-- Blueprint for `/api/scheduler/tasks/*` endpoints
-- Configuration and logging APIs
-- Modern task scheduling functionality
-
-#### Legacy API (`legacy_api_blueprint.py`) - **DO NOT MODIFY**
-- Blueprint for `/api/tasks/*` endpoints
-- Old task management functionality
-- Maintained for backward compatibility only
+### API Blueprint (`api_blueprint.py`)
+- Modern scheduler API blueprint for `/api/scheduler/tasks/*` endpoints
+- Configuration and logging APIs (`/api/config`, `/api/scheduler/validate-cron`)
+- Task management operations (CRUD, execute, toggle, logs)
+- Transaction management and file locking for data integrity
 
 ### Frontend Architecture (Modular JavaScript)
-#### Core Modules (`static/js/core/`)
+#### Core Modules (`web/static/js/core/`)
 - **`state.js`** - Global state management with StateManager (95 lines)
 - **`api.js`** - API requests, connection management, and health checks (150 lines)
 - **`utils.js`** - Common utility functions and helpers (85 lines)
 - **`ui.js`** - UI operations, messaging, and modal management (200 lines)
 
-#### Feature Modules (`static/js/modules/`)
-- **`logs.js`** - Log management for both old and new versions (280 lines)
-- **`legacy-tasks.js`** - Legacy task management functionality (320 lines)
-- **`scheduler.js`** - New task scheduler with CRUD operations (450 lines)
+#### Feature Modules (`web/static/js/modules/`)
+- **`logs.js`** - Log management functionality (280 lines)
+- **`scheduler.js`** - Task scheduler with CRUD operations (450 lines)
 
-#### Main Entry (`static/js/main.js`)
+#### Main Entry (`web/static/js/main.js`)
 - Coordinated initialization and global event handling (80 lines)
 - Module loading and compatibility layer
 - Event binding and cleanup management
 
 ### Scheduling Services
-#### Main Login Service (`auto_login.py`)
-- Entry point for scheduled login automation
-- APScheduler configuration and management
-- Signal handling for graceful shutdown
-- Environment validation
-
-#### Generic Scheduler (`scheduler_engine.py`) - **NEW VERSION**
-- Generic task scheduling engine
-- Cron-based task management
-- Can run standalone for testing
-- Modern scheduling architecture
-
-#### Legacy Task Manager (`task_manager.py`) - **OLD VERSION - DO NOT MODIFY**
-- Legacy process management
-- Old task lifecycle management
-- Maintained for compatibility only
+#### Generic Scheduler (`scheduler_engine.py`)
+- Generic task scheduling engine with APScheduler
+- Cron-based task management with file monitoring
+- Task execution with subprocess management
+- Configuration file watching (watchdog or polling)
+- Transaction management for task operations
 
 ### Core Components
 #### Browser Handler (`browser_handler.py`)
@@ -170,16 +150,10 @@ inclusion: always
 - Success/failure notifications
 - Configurable email templates
 
-#### Process Manager (`process_manager.py`)
-- Process creation and monitoring
-- Process status management
-- Resource usage statistics
-- Process termination and cleanup
-
 #### Logger Helper (`logger_helper.py`)
-- Logging configuration
+- Centralized logging configuration
 - Log reading and filtering
-- Log formatting
+- Log formatting and rotation management
 
 ## Configuration Files
 
@@ -194,10 +168,9 @@ inclusion: always
 
 ## Shell Scripts
 
-- `build.sh` - Docker image building
-- `start.sh` - Production container startup
-- `test.sh` - Test execution
-- `start_web_app.sh` - Combined app and web interface startup
+- `docker/build.sh` - Docker image building
+- `docker/start_docker.sh` - Docker container startup
+- `start_web_app.sh` - Web interface startup
 
 ## Naming Conventions
 
