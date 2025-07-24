@@ -19,9 +19,12 @@ fi
 # 运行容器
 echo "启动容器..."
 docker run -d --name ${CONTAINER_NAME} \
-    --env-file .env \
-    -v $(pwd)/.env:/app/.env \
-    -v $(pwd)/logs:/app/logs \
+    --env-file $(dirname $(pwd))/.env \
+    -v $(dirname $(pwd))/.env:/app/.env \
+    -v $(dirname $(pwd))/logs:/app/logs \
+    -v $(dirname $(pwd))/tasks:/app/tasks \
+    -v $(dirname $(pwd))/tools:/app/tools \
+    -v $(dirname $(pwd))/env:/app/env \
     -p 5001:5001 \
     ${IMAGE_NAME}:${TAG}
 

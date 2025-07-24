@@ -11,7 +11,7 @@ TAG="latest"
 echo "开始构建 Docker 镜像: ${IMAGE_NAME}:${TAG}"
 
 # 构建Docker镜像
-docker build -t ${IMAGE_NAME}:${TAG} .
+docker build -t ${IMAGE_NAME}:${TAG} -f Dockerfile ..
 
 # 检查构建结果
 if [ $? -eq 0 ]; then

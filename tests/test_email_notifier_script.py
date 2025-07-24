@@ -1,5 +1,10 @@
 import os
 from dotenv import load_dotenv
+import sys
+import os
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from email_notifier import EmailNotifier
 
 # 从.env.test文件载环境变量

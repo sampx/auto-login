@@ -17,6 +17,7 @@ import threading
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from dotenv import dotenv_values
+import glob
 
 @dataclass
 class Task:
@@ -512,6 +513,12 @@ class SchedulerEngine:
             self.config_handler = None
             self.api_operation_timestamp = 0
             self.api_operation_lock = threading.Lock()
+            # 轮询机制相关属性
+            self.polling_thread = None
+            self.polling_stop_event = threading.Event()
+            self.last_file_modtimes = {}  # 存储文件最后修改时间
+            self.polling_interval = int(os.getenv('TASK_CONFIG_POLLING_INTERVAL', '10'))  # 轮询间隔（秒）
+            self.enable_polling = os.getenv('ENABLE_TASK_CONFIG_POLLING', 'false').lower() == 'true'  # 是否启用轮询
             SchedulerEngine._initialized = True
         
     def start(self):

@@ -7,10 +7,10 @@
   "task_timeout": 30,
   "task_retry": 2,
   "task_retry_interval": 5,
-  "task_enabled": true,
+  "task_enabled": false,
   "task_log": "logs/task_claude_endpoint_check.log",
   "task_env": {
-    "_ENV_FILE": "/Users/sam/SynologyDrive/SyncFolder/tools/mac_zsh/cct.zrc"
+    "_ENV_FILE": "/app/env/qwcoder.zrc"
   },
   "task_dependencies": [],
   "task_notify": {}

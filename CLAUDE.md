@@ -27,14 +27,8 @@ Automated Login System that performs scheduled website logins with email notific
 ### Docker Setup
 ```bash
 # Build and run
-./build.sh                    # Build Docker image
-./start.sh                    # Start scheduled login service
-./start_web_app.sh           # Start the unified Flask web interface (port 5001)
-
-# Testing
-./test.sh                     # Run all tests
-python test_login.py         # Test browser automation
-python test_email_notifier.py # Test email notifications
+./docker/build.sh             # Build Docker image
+./docker/start_docker.sh      # Start the Docker container (runs web app)
 ```
 
 ### Local Development
@@ -52,6 +46,7 @@ python scheduler_engine.py   # Generic task scheduler (can be run standalone for
 
 # Test components
 python -m pytest test_*.py   # Run tests
+python test_email_notifier.py # Test email notifications
 ```
 
 ### Configuration
@@ -91,11 +86,6 @@ python -m pytest test_*.py   # Run tests
 
 ## Testing
 
-**Browser Tests:**
-- `test_login.py` - Validates login automation.
-- `test_email_notifier.py` - Validates email notifications.
-- `test_scheduler.py` - Tests generic task scheduler.
-
 **Test URLs:**
 - Web UI: http://localhost:5001
 - API: http://localhost:5001/api/scheduler/tasks
@@ -110,4 +100,4 @@ python -m pytest test_*.py   # Run tests
 
 ## Web Interface Notes
 
-- 记住, 本项目web界面现在是一个统一的、现代化的任务调度管理界面, 代码位于 `templates/index.html` 和 `static/js/` 目录下。
+- 记住, 本项目web界面现在是一个统一的、现代化的任务调度管理界面, 代码位于 `web/templates/index.html` 和 `web/static/js/` 目录下。

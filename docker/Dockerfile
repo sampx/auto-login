@@ -1,5 +1,5 @@
 # 使用Python官方镜像作为基础镜像
-FROM python:3.9-slim
+FROM python:3.12-slim
 
 # 设置工作目录
 WORKDIR /app
@@ -16,24 +16,28 @@ RUN apt-get update && apt-get install -y \
 
 # 复制 requirements.txt 文件并安装 Python 依赖
 # 由于 requirements.txt 通常不会每次都改变，所以把它放在靠前的位置，以便利用缓存
-COPY requirements.txt ./
+COPY ../requirements.txt ./
 
 # 安装Python依赖
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 安装Playwright的浏览器
-RUN playwright install chromium
-RUN playwright install-deps
+# RUN playwright install chromium
+# RUN playwright install-deps
 
 # 复制项目文件
 # 由于项目文件可能频繁改变，因此放在 Dockerfile 的最后部分
-COPY . .
+COPY ../. .
 
 # 创建 logs 目录
 RUN mkdir -p /app/logs
+RUN mkdir -p /app/tasks
+RUN mkdir -p /app/tools
+RUN mkdir -p /app/env
+RUN rm -fr /app/docker
 
 # 设置入口点脚本权限
-COPY docker_entrypoint.sh /app/
+COPY docker/docker_entrypoint.sh /app/
 RUN chmod +x /app/docker_entrypoint.sh
 
 # 暴露Web界面端口

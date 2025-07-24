@@ -2,11 +2,13 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
+import logging
+from logger_helper import setup_logging
 
 class EmailNotifier:
     def __init__(self):
-        from logger_helper import LoggerHelper
-        self.logger = LoggerHelper.get_system_logger(__name__)        
+        setup_logging() # Ensure logging is set up
+        self.logger = logging.getLogger(__name__)        
         # 初始化发件人邮箱、密码、收件人邮箱、SMTP服务器和端口
         self.sender_email = os.getenv('EMAIL_SENDER')
         self.sender_password = os.getenv('EMAIL_PASSWORD')
@@ -34,7 +36,17 @@ class EmailNotifier:
 
         try:
             # 使用SMTP_SSL连接到SMTP服务器并发送邮件
-            with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port) as server:
+            try:
+                smtp_port_int = int(self.smtp_port)
+                server = smtplib.SMTP_SSL(self.smtp_server, smtp_port_int)
+            except ValueError:
+                self.logger.error(f"SMTP 端口 '{self.smtp_port}' 无效，必须是整数。")
+                return
+            except Exception as e:
+                self.logger.error(f"无法连接到 SMTP 服务器 {self.smtp_server}:{self.smtp_port}: {str(e)}")
+                return
+
+            with server:
                 self.logger.debug("SSL连接已建立")
                 server.login(self.sender_email, self.sender_password)
                 self.logger.debug("登录成功")
@@ -54,8 +66,8 @@ class EmailNotifier:
             self.logger.error(f"未知错误: {str(e)}")
 
 def notify_success(additional_info=""):
-    from logger_helper import LoggerHelper
-    logger = LoggerHelper.get_logger(notify_success.__name__)  
+    setup_logging() # Ensure logging is set up
+    logger = logging.getLogger(notify_success.__name__)  
     # 创建EmailNotifier实例
     notifier = EmailNotifier()
     message = "网站自动登录尝试成功。"
@@ -72,8 +84,8 @@ def notify_success(additional_info=""):
     )
 
 def notify_failure(error_message):
-    from logger_helper import LoggerHelper
-    logger = LoggerHelper.get_logger(notify_failure.__name__)  
+    setup_logging() # Ensure logging is set up
+    logger = logging.getLogger(notify_failure.__name__)  
     # 创建EmailNotifier实例
     notifier = EmailNotifier()
     message = f"自动登录尝试失败。错误: {error_message}"
@@ -86,3 +98,4 @@ def notify_failure(error_message):
         "网站自动登录失败",
         message
     )
+

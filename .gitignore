@@ -43,3 +43,4 @@ wheels/
 # AI generated files
 .prompts/
 .aider*
+.claude/

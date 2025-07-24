@@ -803,14 +803,7 @@ def clear_task_logs(task_id):
 
         log_file = task.get('task_log', f'logs/task_{task_id}.log')
         if os.path.exists(log_file):
-            # 创建备份
-            backup_file = f"{log_file}.bak"
-            try:
-                shutil.copy2(log_file, backup_file)
-            except Exception as e:
-                logger.warning(f"API接口: 创建日志备份失败: {e}")
-            
-            # 清空日志文件
+            # 直接清空日志文件，不创建备份
             with open(log_file, 'w') as f:
                 f.truncate(0)
             logger.info(f"API接口: 成功清空任务 {task_id} 的日志")

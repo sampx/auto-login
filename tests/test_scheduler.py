@@ -57,9 +57,9 @@ class SchedulerTester:
         try:
             # 创建简单测试任务
             test_task = Task(
-                task_id="test_simple",
+                task_id="shell_task_example",
                 task_name="简单测试任务",
-                task_exec="python test_task.py",  # 相对路径，在任务目录内执行
+                task_exec="bash shell_task_example.sh",  # 相对路径，在任务目录内执行
                 task_schedule="* * * * *",
                 task_desc="测试任务执行",
                 task_timeout=60
