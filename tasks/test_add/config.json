@@ -1,6 +1,6 @@
 {
   "task_id": "test_add",
-  "task_name": "测试添加任务1",
+  "task_name": "测试添加任务",
   "task_exec": "bash test_add.sh",
   "task_schedule": "*/1 * * * *",
   "task_desc": "测试任务添加",

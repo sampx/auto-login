@@ -395,73 +395,56 @@ const Scheduler = {
                 if (content) {
                     content.innerHTML = `
                         <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
-                            <div style="margin-bottom: 15px;">
-                                <strong style="color: #333;">任务名称:</strong>
-                                <div style="margin-top: 5px; padding: 8px; background: #f8f9fa; border-radius: 3px;">${task.task_name}</div>
-                            </div>
-                            
-                            <div style="margin-bottom: 15px;">
-                                <strong style="color: #333;">任务ID:</strong>
-                                <div style="margin-top: 5px; padding: 8px; background: #f8f9fa; border-radius: 3px; font-family: monospace;">${task.task_id}</div>
-                            </div>
-                            
-                            <div style="margin-bottom: 15px;">
-                                <strong style="color: #333;">任务描述:</strong>
-                                <div style="margin-top: 5px; padding: 8px; background: #f8f9fa; border-radius: 3px;">${task.task_desc || '无描述'}</div>
-                            </div>
-                            
-                            <div style="margin-bottom: 15px;">
-                                <strong style="color: #333;">执行命令:</strong>
-                                <div style="margin-top: 5px; padding: 8px; background: #f8f9fa; border-radius: 3px; font-family: monospace; font-size: 13px;">${task.task_exec}</div>
-                            </div>
-                            
-                            <div style="margin-bottom: 15px;">
-                                <strong style="color: #333;">调度表达式:</strong>
-                                <div style="margin-top: 5px; padding: 8px; background: #f8f9fa; border-radius: 3px; font-family: monospace;">${task.task_schedule}</div>
-                            </div>
-                            
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-                                <div>
-                                    <strong style="color: #333;">超时时间:</strong>
-                                    <div style="margin-top: 5px; padding: 8px; background: #f8f9fa; border-radius: 3px;">${task.task_timeout} 秒</div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>任务ID</label>
+                                    <div class="form-control-plaintext">${task.task_id}</div>
                                 </div>
-                                <div>
-                                    <strong style="color: #333;">重试次数:</strong>
-                                    <div style="margin-top: 5px; padding: 8px; background: #f8f9fa; border-radius: 3px;">${task.task_retry} 次</div>
+                                <div class="form-group">
+                                    <label>任务名称</label>
+                                    <div class="form-control-plaintext">${task.task_name}</div>
                                 </div>
                             </div>
                             
-                            <div style="margin-bottom: 15px;">
-                                <strong style="color: #333;">日志文件:</strong>
-                                <div style="margin-top: 5px; padding: 8px; background: #f8f9fa; border-radius: 3px; font-family: monospace;">${task.task_log}</div>
+                            <div class="form-group">
+                                <label>执行命令</label>
+                                <div class="form-control-plaintext">${task.task_exec}</div>
                             </div>
                             
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-                                <div>
-                                    <strong style="color: #333;">启用状态:</strong>
-                                    <div style="margin-top: 5px; padding: 8px; background: #f8f9fa; border-radius: 3px;">
-                                        <span style="color: ${task.task_enabled ? '#28a745' : '#dc3545'};">
-                                            ${task.task_enabled ? '启用' : '禁用'}
-                                        </span>
-                                    </div>
+                            <div class="form-group">
+                                <label>日志文件</label>
+                                <div class="form-control-plaintext">${task.task_log}</div>
+                            </div>
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>超时时间</label>
+                                    <div class="form-control-plaintext">${task.task_timeout} 秒</div>
                                 </div>
-                                <div>
-                                    <strong style="color: #333;">下次执行:</strong>
-                                    <div style="margin-top: 5px; padding: 8px; background: #f8f9fa; border-radius: 3px;">
-                                        ${task.next_run_time ? new Date(task.next_run_time).toLocaleString() : '未安排'}
-                                    </div>
+                                <div class="form-group">
+                                    <label>重试策略 (次数/间隔秒)</label>
+                                    <div class="form-control-plaintext">${task.task_retry || 0}/${task.task_retry_interval || 0}</div>
                                 </div>
                             </div>
                             
-                            <div style="margin-bottom: 15px;">
-                                <strong style="color: #333;">创建时间:</strong>
-                                <div style="margin-top: 5px; padding: 8px; background: #f8f9fa; border-radius: 3px;">${new Date(task.created_at).toLocaleString()}</div>
+                            ${task.task_env && Object.keys(task.task_env).length > 0 ? `
+                            <div class="form-group">
+                                <label>环境变量</label>
+                                <div class="env-vars-container">
+                                    ${Object.entries(task.task_env).map(([key, value]) => `
+                                        <div class="env-var-row">
+                                            <div class="form-control-plaintext env-var-key">${key}</div>
+                                            <div class="form-control-plaintext env-var-value">${value}</div>
+                                        </div>
+                                    `).join('')}
+                                </div>
                             </div>
+                            ` : ''}
                             
                             ${task.last_run_time ? `
-                            <div style="margin-bottom: 15px;">
-                                <strong style="color: #333;">上次执行:</strong>
-                                <div style="margin-top: 5px; padding: 8px; background: #f8f9fa; border-radius: 3px;">${new Date(task.last_run_time).toLocaleString()}</div>
+                            <div class="form-group">
+                                <label>上次执行</label>
+                                <div class="form-control-plaintext">${new Date(task.last_run_time).toLocaleString()}</div>
                             </div>
                             ` : ''}
                         </div>
@@ -515,11 +498,9 @@ const Scheduler = {
                     'task_id_display': task.task_id,
                     'task_name': task.task_name,
                     'task_schedule': task.task_schedule,
-                    'task_exec': task.task_exec,
                     'script_type': scriptType,
                     'task_desc': task.task_desc || '',
                     'task_timeout': task.task_timeout || 10, // 默认10秒
-                    'task_log': task.task_log || `logs/task_${task.task_id}.log`,
                     'task_enabled': task.task_enabled.toString(),
                     'task_retry_combined': `${task.task_retry || 0}/${task.task_retry_interval || 0}`
                 };
@@ -545,6 +526,12 @@ const Scheduler = {
             if (editModalTitle) {
                 editModalTitle.innerText = `编辑任务: ${task.task_name}`;
             }
+
+            // 双重保险：强制移除不应存在的字段
+            const execField = form.querySelector('[name="task_exec"]');
+            const logField = form.querySelector('[name="task_log"]');
+            if (execField) execField.closest('.form-group').remove();
+            if (logField) logField.closest('.form-group').remove();
             
             UIManager.ModalManager.showEditModal();
         } catch (error) {
@@ -592,15 +579,15 @@ const Scheduler = {
                 task_id: taskId,
                 task_name: form.task_name.value,
                 task_schedule: form.task_schedule.value,
-                task_exec: form.task_exec.value, // 使用表单中的执行命令
                 task_desc: form.task_desc.value,
                 task_enabled: form.task_enabled.value === 'true',
                 task_timeout: parseInt(form.task_timeout.value) || 10,
                 task_retry: !isNaN(retry) ? retry : 0,
                 task_retry_interval: !isNaN(retryInterval) ? retryInterval : 0,
-                task_log: form.task_log.value,
                 task_env: getEnvVars('edit'), // 从UI收集环境变量
-                // 保留原始值
+                // 保留原始值（包括不可修改的执行命令和日志文件路径）
+                task_exec: originalTask.task_exec,
+                task_log: originalTask.task_log,
                 task_dependencies: originalTask.task_dependencies || [],
                 task_notify: originalTask.task_notify || {}
             };

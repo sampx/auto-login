@@ -902,6 +902,55 @@ body {
     margin-top: 0.25rem;
 }
 
+.modal-body .form-control-plaintext {
+    display: block;
+    width: 100%;
+    padding: 0.375rem 0;
+    margin-bottom: 0;
+    line-height: 1.5;
+    color: #495057;
+    background-color: transparent;
+    border: solid transparent;
+    border-width: 1px 0;
+    font-size: 0.9rem;
+}
+
+.modal-body .form-group {
+    margin-bottom: 1rem;
+}
+
+.modal-body .form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: var(--dark-text);
+    font-size: 0.9rem;
+}
+
+.env-vars-container {
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px;
+    background-color: #f8f9fa;
+}
+
+.env-var-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 8px;
+    align-items: center;
+}
+
+.env-var-key {
+    flex: 1;
+    font-weight: 500;
+}
+
+.env-var-value {
+    flex: 2;
+}
+
+
 /* CRON验证结果 */
 .cron-result {
     padding: 8px;

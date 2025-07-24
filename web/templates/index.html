@@ -5,6 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Web任务管理器</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <link rel="stylesheet" href="/static/css/main.css">
 
 </head>
@@ -195,10 +198,6 @@
                                 <input type="text" id="editTaskDesc" name="task_desc" class="form-control">
                             </div>
                             
-                            <div class="form-group">
-                                <label for="editTaskExec">执行命令</label>
-                                <input type="text" id="editTaskExec" name="task_exec" class="form-control" required>
-                            </div>
                             
                             <div class="form-group">
                                 <label for="editTaskSchedule">调度表达式（CRON格式）</label>
@@ -221,12 +220,6 @@
                                 </div>
                             </div>
                             
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="editTaskLog">日志文件路径</label>
-                                    <input type="text" id="editTaskLog" name="task_log" class="form-control">
-                                </div>
-                            </div>
 
                             <!-- 环境变量 -->
                             <div class="form-group">

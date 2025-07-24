@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # 激活虚拟环境（如果使用）
-# source venv/bin/activate
+source venv/bin/activate
 
 # 在启动前清理日志
-echo "正在清理旧日志..."
-python3 clear_logs.py
-echo "" # 添加一个空行以提高可读性
+# echo "正在清理旧日志..."
+# python3 clear_logs.py
+# echo "" # 添加一个空行以提高可读性
 
 # 检查命令行参数
 LOG_LEVEL_ARG=""
