@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # 激活虚拟环境（如果使用）
-source venv/bin/activate
+echo "激活 python 虚拟环境..."
+source .venv/bin/activate
 
 # 在启动前清理日志
 # echo "正在清理旧日志..."
@@ -22,7 +23,7 @@ lsof -ti:${WEB_PORT} | xargs kill -9 2>/dev/null || true
 sleep 2
 
 # 启动统一的Web应用
-echo "启动统一Web应用 (端口: ${WEB_PORT})..."
+echo "启动Web应用 (端口: ${WEB_PORT})..."
 ${LOG_LEVEL_ARG}
 export WEB_PORT=${WEB_PORT}
 python3 app.py

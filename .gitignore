@@ -19,6 +19,7 @@ sdist/
 var/
 logs/
 locks/
+tasks/
 wheels/
 *.egg-info/
 .installed.cfg
